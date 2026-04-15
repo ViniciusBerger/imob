@@ -1,5 +1,12 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
+interface AuthUser {
+    id: string;
+    email: string;
+    name: string;
+    role: string;
+}
+
 interface AuthContextType {
     user: any | null;
     token: string | null;
@@ -11,26 +18,31 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-    const [user, setUser] = useState<any | null>(null);
+    const [user, setUser] = useState<AuthUser | null>(null);
     const [token, setToken] = useState<string | null>(sessionStorage.getItem('token'));
 
     useEffect(() => {
-        // Clear legacy localStorage to ensure clean state
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-
         // Hydrate state from sessionStorage on boot
         const storedToken = sessionStorage.getItem('token');
         const storedUser = sessionStorage.getItem('user');
 
-        if (storedToken) {
-            setToken(storedToken);
-            if (storedUser) {
-                try {
-                    setUser(JSON.parse(storedUser));
-                } catch (e) {
-                    console.error("Failed to parse user data", e);
-                }
+        if (!storedToken) {
+            setToken(null);
+            setUser(null);
+            return;
+        }
+
+        setToken(storedToken);
+
+        if (storedUser) {
+            try {
+                setUser(JSON.parse(storedUser));
+            } catch (error) {
+                console.error('Failed to parse user data from sessionStorage', error);
+                sessionStorage.removeItem('token');
+                sessionStorage.removeItem('user');
+                setToken(null);
+                setUser(null);
             }
         }
     }, []);

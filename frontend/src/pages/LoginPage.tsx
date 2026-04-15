@@ -28,10 +28,13 @@ export default function LoginPage() {
             }
 
             const data = await res.json();
-            login(data.access_token, { email });
+            // TODO: sessionStorage is temporary; migrate auth token storage to httpOnly cookies for better security.
+            login(data.access_token, data.user);
             navigate('/admin');
-        } catch (err: any) {
-            setError(err.message || 'Erro ao conectar com o servidor.');
+        }catch (err: unknown) {
+            const message =
+            err instanceof Error ? err.message : 'Erro ao conectar com o servidor.';
+            setError(message);
         } finally {
             setLoading(false);
         }
