@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  app:
+    # Nome unificado
+    image: ${DOCKER_USERNAME}/pms-unified:latest
+    # Se quiser buildar na VPS (Contexto Raiz)
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    networks:
+      - eSoluRede01
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_HOST=${REDIS_HOST}
+      - JWT_SECRET=${JWT_SECRET}
+      - PORT=3000
+    # Usamos 'db push' pois não criamos arquivos de migração localmente
+    command: sh -c "npx prisma db push --accept-data-loss && npm run start:prod"
+    volumes:
+      - /home/pms/uploads:/usr/src/app/uploads
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints: [ node.role == manager ]
+      labels:
+        - "traefik.enable=true"
+        # Roteamento Frontend (e API via mesma porta)
+        # O NestJS vai servir o frontend em rotas não-api
+        - "traefik.http.routers.pms_web.rule=Host(`esolu.com.br`)"
+        - "traefik.http.routers.pms_web.entrypoints=websecure"
+        - "traefik.http.routers.pms_web.tls.certresolver=letsencryptresolver"
+        # Aponta para o MESMO service (pms_app)
+        - "traefik.http.services.pms_app.loadbalancer.server.port=3000"
+
+networks:
+  eSoluRede01:
+    external: true

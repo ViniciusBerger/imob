@@ -1,0 +1,396 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  VIEWER
+  TENANT
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      UserRole @default(VIEWER)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  resetToken       String?
+  resetTokenExpiry DateTime?
+  
+  propertyNotes    PropertyNote[]
+  
+  tenantId         String?   @unique // Link to Tenant profile if role is TENANT
+  tenant           Tenant?   @relation(fields: [tenantId], references: [id])
+
+  auditLogs        AuditLog[]
+}
+
+enum PropertyType {
+  RESIDENTIAL
+  COMMERCIAL
+  LAND
+}
+
+model Property {
+  id          String       @id @default(uuid())
+  code        String       @unique // Cód. Imóvel
+  registryId  String?      // Matrícula
+  address     String
+  type        PropertyType
+  addressString String? // Helper for full address display
+
+  landArea    Float        @default(0) // Metragem Terreno
+  builtArea   Float        @default(0) // Metragem Construída
+  
+  bathrooms   Int?         // Banheiros
+  bedrooms    Int?         // Quartos
+  floors      Int?         // Andares
+  garage      Int?         // Vagas de Garagem
+  basement    Boolean?     // Porão
+  
+  description String?      @db.Text
+  photos      String[]     // Array of URLs/Paths
+
+  nickname    String?      // Apelido do Imóvel
+  city        String?
+  state       String?
+
+  // Acquisition Financials
+  
+  purchasePrice     Decimal? @db.Decimal(15, 2)
+  purchaseDate      DateTime?
+  purchaseType      String?  // 'CASH', 'FINANCED', 'INSTALLMENT'
+  
+  // Financiamento / Parcelamento
+  isFinanced        Boolean  @default(false)
+  financingType     String?  // 'BANK', 'DIRECT'
+  
+  financingTotalValue Decimal? @db.Decimal(15, 2)
+  financingStartDate  DateTime?
+  financingEndDate    DateTime?
+  
+  installmentValue    Decimal? @db.Decimal(12, 2)
+  financingDueDay     Int?     // Dia do vencimento
+  installmentsCount   Int?
+  installmentsPaid    Int?
+  
+  correctionIndex     String?  // 'SELIC', 'IPCA', 'IGPM', 'TR'
+  
+  // Destination & Status
+  forSale           Boolean @default(false)
+  forRent           Boolean @default(false)
+  
+  salePrice         Decimal? @db.Decimal(15, 2)
+  rentPrice         Decimal? @db.Decimal(15, 2)
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  leases            LeaseContract[]
+  expenses          Expense[]
+  propertyExpenses  PropertyExpense[] 
+  notes             PropertyNote[]
+  documents         PropertyDocument[]
+  maintenances      Maintenance[]
+  invoices          Invoice[]
+
+  deletedAt         DateTime?
+}
+
+model PropertyDocument {
+  id          String   @id @default(uuid())
+  title       String   
+  filePath    String
+  fileType    String?
+  
+  propertyId  String
+  property    Property @relation(fields: [propertyId], references: [id])
+  
+  createdAt   DateTime @default(now())
+}
+
+model Tenant {
+  id        String   @id @default(uuid())
+  name      String
+  document  String   @unique // CPF/CNPJ
+  email     String?
+  phone     String?
+  
+  profession String?
+  
+  contract LeaseContract[]
+  guarantors Guarantor[] 
+  
+  deletedAt DateTime?
+
+  user      User?
+}
+
+model Guarantor {
+  id        String   @id @default(uuid())
+  name      String
+  document  String   @unique // CPF
+  email     String?
+  phone     String?
+  
+  tenants   Tenant[]
+  leases    LeaseContract[]
+}
+
+enum ContractType {
+  RENT
+  SALE
+}
+
+model LeaseContract {
+  id             String    @id @default(uuid())
+  type           ContractType @default(RENT)
+  
+  startDate      DateTime
+  endDate        DateTime
+  
+  rentValue      Decimal   @db.Decimal(12, 2) // Valor acordado
+  rentDueDay     Int       @default(5) // Dia do vencimento
+  isActive       Boolean   @default(true)
+
+  // Reajuste / Readjustment
+  adjustmentRate Decimal?  @db.Decimal(5, 2) // IPCA/IGPM %
+  adjustmentIndex String? // 'IPCA', 'IGPM'
+  lastAdjustmentDate DateTime?
+  nextAdjustmentDate DateTime? // Programado
+  
+  adjustmentBaseMonth Int?     // Mês base para reajuste (1-12)
+  allowManualAdjustment Boolean @default(true) // Se true, permite escolher data/taxa
+  
+  // Renovação
+  autoRenew      Boolean   @default(false)
+  
+  notes          String?   @db.Text // Anotações do contrato
+
+  propertyId     String
+  property       Property  @relation(fields: [propertyId], references: [id])
+  
+  tenantId       String
+  tenant         Tenant    @relation(fields: [tenantId], references: [id])
+
+  guarantorId    String?
+  guarantor      Guarantor? @relation(fields: [guarantorId], references: [id])
+
+  invoices       Invoice[]
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  deletedAt      DateTime?
+}
+
+enum ExpenseType {
+  ONEOFF    // Único (reforma)
+  RECURRING // Recorrente (Condomínio, IPTU)
+}
+
+model Expense {
+  id             String      @id @default(uuid())
+  description    String
+  amount         Decimal     @db.Decimal(12, 2)
+  date           DateTime
+  type           ExpenseType
+  category       String?     // e.g., 'Condo', 'Tax', 'Repair'
+  
+  propertyId     String
+  property       Property    @relation(fields: [propertyId], references: [id])
+
+  createdAt      DateTime    @default(now())
+}
+
+enum PropertyExpenseFrequency {
+  MONTHLY
+  YEARLY
+  ONCE
+  CUSTOM
+}
+
+// Despesas fixas cadastradas no imóvel (ex: Condomínio que vem todo mês)
+// Isso serve de 'molde' para criar o Financeiro (Invoice/Expense) mensalmente.
+model PropertyExpense {
+  id          String   @id @default(uuid())
+  name        String   // e.g. IPTU, Condomínio
+  value       Decimal  @db.Decimal(12, 2)
+  frequency   PropertyExpenseFrequency @default(MONTHLY)
+  
+  // New Fields for Financial Hardening
+  dueDateDay       Int?      // Dia de vencimento (ex: 10)
+  customPeriodicity String? // ex: "2m", "45d" se frequency == CUSTOM (future dev)
+  
+  active           Boolean   @default(true)
+  autoGenerate     Boolean   @default(true) // Se deve gerar Invoice automaticamente
+  lastGeneratedAt  DateTime? // Controle de geração
+  
+  propertyId  String
+  property    Property @relation(fields: [propertyId], references: [id])
+}
+
+// Índices Econômicos (IPCA, IGPM, etc.)
+model EconomicIndex {
+  id        String   @id @default(uuid())
+  name      String   // IPCA, IGPM, SELIC
+  date      DateTime // Mês/Ano de referência (geralmente dia 1)
+  value     Decimal  @db.Decimal(5, 2) // Valor percentual do mês (0.50 = 0.5%)
+  
+  createdAt DateTime @default(now())
+  
+  @@unique([name, date]) // Um índice só tem um valor por mês
+}
+
+model PropertyNote {
+  id        String   @id @default(uuid())
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  property   Property @relation(fields: [propertyId], references: [id])
+  propertyId String
+
+  user      User?     @relation(fields: [userId], references: [id])
+  userId    String?   // Optional if system generated
+}
+
+enum MaintenanceStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+// Manutenção Programada
+model Maintenance {
+  id          String           @id @default(uuid())
+  title       String
+  description String?          @db.Text
+  scheduledDate DateTime
+  status      MaintenanceStatus @default(PENDING)
+  
+  cost        Decimal?         @db.Decimal(12, 2) // Se houve custo
+  isRecurring Boolean          @default(false)
+  frequency   String?          // 'MONTHLY', 'YEARLY'
+  
+  propertyId  String
+  property    Property         @relation(fields: [propertyId], references: [id])
+  
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  deletedAt   DateTime?
+}
+
+enum InvoiceType {
+  RENT        // Receita de Aluguel
+  INSTALLMENT // Pagamento de Financiamento (Despesa)
+  EXPENSE     // Despesa Avulsa
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum InvoiceApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// Financeiro Unificado (Contas a Pagar e Receber)
+model Invoice {
+  id          String        @id @default(uuid())
+  type        InvoiceType
+  description String
+  amount      Decimal       @db.Decimal(12, 2)
+  dueDate     DateTime
+  
+  status      InvoiceStatus @default(PENDING) // Payment Status
+  approvalStatus InvoiceApprovalStatus @default(PENDING) // Administrative Approval
+  
+  paidAt      DateTime?
+  paidAmount  Decimal?      @db.Decimal(12, 2)
+  
+  notes       String?       // Anotações ao dar baixa
+  
+  // Relations
+  leaseId     String?
+  lease       LeaseContract? @relation(fields: [leaseId], references: [id])
+
+  propertyId  String?
+  property    Property?      @relation(fields: [propertyId], references: [id])
+  
+  // Could relate to Property directly if it's an expense not linked to a lease
+  // For now let's keep it simple. If it's INSTALLMENT, we link to Property?
+  // Or just use Lease for Income and Expense for generic?
+  // User wanted "Financeiro" view.
+  // Let's rely on mapping.
+  
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  deletedAt   DateTime?     // Soft Delete
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  action      String   // CREATE, UPDATE, DELETE
+  entity      String   // Property, User, etc.
+  entityId    String
+  changes     String?  @db.Text // JSON string of changes
+  
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+  
+  createdAt   DateTime @default(now())
+}
+
+
+
+model SiteConfig {
+  id              String   @id @default(uuid())
+  appName         String   @default("eSolu - Imóveis")
+  
+  // SEO & Meta
+  seoTitle        String?
+  seoDescription  String?
+  
+  // Hero Section
+  heroTitle       String?
+  heroSubtitle    String?
+  heroBackgroundImage String? // URL
+  
+  // Contact
+  contactPhone    String?
+  contactEmail    String?
+  contactWhatsApp String?
+  
+  // Appearance & Behavior
+  primaryColor    String   @default("blue")
+  layoutType      String   @default("MODERN_GRID") // GRID, LIST, MAP
+  showPrices      Boolean  @default(true)
+  showUnavailable Boolean  @default(false)
+
+  // Branding
+  logoUrl         String?
+  faviconUrl      String?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}

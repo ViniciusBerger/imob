@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pms_unified
+    restart: always
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_HOST=${REDIS_HOST}
+      - JWT_SECRET=${JWT_SECRET}
+      - PORT=3000
+    volumes:
+      - ./uploads:/usr/src/app/uploads
+    networks:
+      - proxy_network
+      - internal_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pms-app.rule=Host(`pms.yourdomain.com`) || Host(`api.pms.yourdomain.com`)"
+      - "traefik.http.routers.pms-app.entrypoints=websecure"
+      - "traefik.http.routers.pms-app.tls.certresolver=myresolver"
+      - "traefik.http.services.pms-app.loadbalancer.server.port=3000"
+
+networks:
+  proxy_network:
+    external: true
+  internal_network:

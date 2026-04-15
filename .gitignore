@@ -1,0 +1,73 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build output
+dist/
+build/
+coverage/
+**/dist/
+**/build/
+**/coverage/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# TypeScript
+*.tsbuildinfo
+
+# NestJS uploads / generated local storage
+uploads/
+**/uploads/
+
+# Prisma
+**/prisma/dev.db
+**/prisma/dev.db-journal
+**/prisma/*.db
+**/prisma/*.db-journal
+
+# Test output
+jest-html-reporters-*.html
+
+# Frontend specific
+.next/
+out/
+vite.svg
+
+# Package managers
+.pnpm-store/
+.npm/
+.yarn/
+.yarn-cache/
+.yarn/unplugged/
+.yarn/build-state.yml
+.yarn/install-state.gz
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+*.tmp
+
+# Archives
+*.zip
+*.tar
+*.gz
+*.rar
+*.7z
