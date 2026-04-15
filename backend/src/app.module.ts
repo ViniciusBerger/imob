@@ -6,6 +6,7 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { TenantsModule } from './tenants/tenants.module';
 import { GuarantorsModule } from './guarantors/guarantors.module';
+import { ConfigModule } from '@nestjs/config';
 import { LeasesModule } from './leases/leases.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { StatsModule } from './stats/stats.module';
@@ -32,6 +33,11 @@ import { EconomicIndicesModule } from './economic-indices/economic-indices.modul
                 },
             }
         ),
+    
+        ConfigModule.forRoot({
+            isGlobal: true,
+            envFilePath: '../.env', // because .env is one level above backend
+    }),
         PropertiesModule,
         AuthModule,
         UsersModule,

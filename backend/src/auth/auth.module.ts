@@ -6,22 +6,33 @@ import { JwtModule } from '@nestjs/jwt';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
 import { MailModule } from '../mail/mail.module';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 
-const jwtSecret = process.env.JWT_SECRET
-if (!jwtSecret) throw new Error('AUTH MODULE => JWT_SCRET is not defined')
+
 
 @Module({
     imports: [
-        UsersModule,
-        MailModule,
-        PassportModule,
-        PassportModule,
-        
-        JwtModule.register({
-            secret: jwtSecret ,
-            signOptions: { expiresIn: '1d' },
-        }),
-    ],
+    UsersModule,
+    MailModule,
+    PassportModule,
+    ConfigModule,
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => {
+        const jwtSecret = configService.get<string>('JWT_SECRET');
+
+        if (!jwtSecret) {
+          throw new Error('AUTH MODULE => JWT_SECRET is not defined');
+        }
+
+        return {
+          secret: jwtSecret,
+          signOptions: { expiresIn: '1d' },
+        };
+      },
+    }),
+  ],
     providers: [AuthService, JwtStrategy],
     controllers: [AuthController],
     exports: [AuthService],
