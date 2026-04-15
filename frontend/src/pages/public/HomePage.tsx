@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import { Search, MapPin, Bed, Bath, ArrowRight, Loader2 } from 'lucide-react';
-import { SiteConfig } from '../../services/api';
+import { SiteConfig } from '../../api';
 
 export default function HomePage() {
     const { config } = useOutletContext<{ config: SiteConfig | null }>();

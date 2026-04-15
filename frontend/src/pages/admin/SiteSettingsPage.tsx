@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useAuth } from '../../contexts/AuthContext';
-import { api, SiteConfig, UpdateSiteConfigDto } from '../../services/api';
+import { api, SiteConfig, UpdateSiteConfigDto } from '../../api';
 import { Save, Loader2, Monitor, Layout, Palette, Phone } from 'lucide-react';
 import clsx from 'clsx';
 

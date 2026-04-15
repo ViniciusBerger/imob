@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { api, API_URL } from '../services/api';
+import { api, API_URL } from '../api';
 
 interface PersonFormProps {
     type: 'tenant' | 'guarantor';

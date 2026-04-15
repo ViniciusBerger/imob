@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { TrendingUp, Users, Building2, Wallet, Home, DollarSign, ArrowUpRight, ArrowDownRight, PiggyBank } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { api, DashboardStats } from '../services/api';
+import { api, DashboardStats } from '../api';
 import ApprovalsList from '../components/ApprovalsList';
 
 export default function Dashboard() {

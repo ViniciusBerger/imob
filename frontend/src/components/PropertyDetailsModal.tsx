@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Edit2, Trash2, MapPin, Building, Key, DollarSign, FileText, Settings, Save, StickyNote, Send, Paperclip, Wrench, Download, Plus, CheckCircle, AlertTriangle, UploadCloud, Upload } from 'lucide-react';
-import { api, Property } from '../services/api';
+import { api, Property } from '../api';
 
 interface PropertyDetailsModalProps {
     propertyId: string;

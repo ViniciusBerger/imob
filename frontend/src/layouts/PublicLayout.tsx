@@ -1,7 +1,7 @@
 import { Link, Outlet } from 'react-router-dom';
 import { LogIn, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { api, SiteConfig } from '../services/api';
+import { api, SiteConfig } from '../api';
 
 export default function PublicLayout() {
     const [config, setConfig] = useState<SiteConfig | null>(null);
