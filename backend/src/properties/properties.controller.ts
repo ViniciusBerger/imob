@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, UseInterceptors, UploadedFiles, Patch, Delete, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseInterceptors, UploadedFiles, Patch, Delete, UseGuards, Req } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { PropertiesService } from './properties.service';
 import { CreatePropertyDto } from './dto/create-property.dto';
@@ -80,8 +80,8 @@ export class PropertiesController {
 
     @UseGuards(AuthGuard('jwt'))
     @Post(':id/notes')
-    addNote(@Param('id') id: string, @Body() body: { content: string, userId: string }) {
-        return this.propertiesService.addNote(id, body.userId, body.content);
+    addNote(@Param('id') id: string, @Body() body: { content: string, userId: string }, @Req() req:any) {
+        return this.propertiesService.addNote(id, req.user.id, body.content);
     }
 
     @UseGuards(AuthGuard('jwt'))
