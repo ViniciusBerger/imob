@@ -6,6 +6,7 @@ import { financeApi } from './finance.api';
 import { statsApi } from './stats.api';
 import { usersApi } from './users.api';
 import { siteConfigApi } from './site-config.api';
+import { expensesApi } from './expenses.api';
 
 export { API_URL } from './client.api';
 export * from './types';
@@ -19,6 +20,7 @@ export {
     statsApi,
     usersApi,
     siteConfigApi,
+    expensesApi
 };
 
 export const api = {
@@ -30,4 +32,5 @@ export const api = {
     stats: statsApi,
     users: usersApi,
     siteConfig: siteConfigApi,
+    expenses: expensesApi
 };
