@@ -4,7 +4,6 @@ import { AuthService } from '../auth.service';
 import { UsersService } from '../../users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import { MailService } from '../../mail/mail.service';
-import { describe, it } from 'node:test';
 
 describe('AuthService', () => {
     let service: AuthService;
@@ -40,8 +39,7 @@ describe('AuthService', () => {
                 id: 'user-1',
                 email: 'john@example.com',
                 role: 'ADMIN',
-                first_name: 'John',
-                last_name: 'Doe',
+                name: 'John Doe',
                 password: 'hashed-password',
             };
 
@@ -56,8 +54,7 @@ describe('AuthService', () => {
                 id: 'user-1',
                 email: 'john@example.com',
                 role: 'ADMIN',
-                first_name: 'John',
-                last_name: 'Doe',
+                name: 'John Doe'
             });
         });
 
@@ -89,7 +86,7 @@ describe('AuthService', () => {
                 id: 'user-1',
                 email: 'john@example.com',
                 role: 'ADMIN',
-                name: 'jhon'
+                name: 'John Doe'
             };
 
             jwtServiceMock.sign.mockReturnValue('signed-jwt-token');

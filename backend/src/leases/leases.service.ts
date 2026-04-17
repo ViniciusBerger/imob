@@ -1,17 +1,25 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { CreateLeaseDto } from './dto/create-lease.dto';
-
 import { EconomicIndicesService } from '../economic-indices/economic-indices.service';
+
+// interface to object apply adjustment data. 
+interface IAdjustmentData {
+    rate?: number, 
+    indexName?: string, 
+    date?: string
+}
 
 @Injectable()
 export class LeasesService {
+    
+    
     constructor(
         private prisma: PrismaService,
         private indicesService: EconomicIndicesService
     ) { }
 
-    async applyAdjustment(id: string, data: { rate?: number, indexName?: string, date?: string }) {
+    async applyAdjustment(id: string, data: IAdjustmentData) {
         const lease = await this.prisma.leaseContract.findUnique({ where: { id } });
         if (!lease) throw new Error('Contrato não encontrado');
 
