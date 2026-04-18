@@ -3,8 +3,8 @@ import { LeasesService } from './leases.service';
 import { LeasesController } from './leases.controller';
 import { PrismaService } from '../prisma.service';
 import { EconomicIndicesModule } from '../economic-indices/economic-indices.module';
-import { LeasesRepository } from './leases.repository';
-import { LEASES_REPOSITORY } from './leases.repository.interface';
+import { LeasesRepository } from './repository/leases-prisma.repository';
+import { LEASES_REPOSITORY } from './repository/leases-prisma.interface';
 
 @Module({
   imports: [EconomicIndicesModule],
@@ -13,10 +13,6 @@ import { LEASES_REPOSITORY } from './leases.repository.interface';
     LeasesService,
     PrismaService,
     LeasesRepository,
-    {
-      provide: LEASES_REPOSITORY,
-      useClass: LeasesRepository,
-    },
   ],
 })
 export class LeasesModule {}

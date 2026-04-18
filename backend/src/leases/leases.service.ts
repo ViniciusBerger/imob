@@ -1,9 +1,11 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma.service';
-import { CreateLeaseDto } from './dto/create-lease.dto';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { EconomicIndicesService } from '../economic-indices/economic-indices.service';
+import { LeaseWithRelations, UpdateLeaseRecordData } from './repository/leases-prisma.interface';
+import { NotFoundException } from '@nestjs/common';
+import { LeaseContract } from '@prisma/client';
+import { LeasesRepository } from './repository/leases-prisma.repository';
 
-// interface to object apply adjustment data. 
+// interface to objectify applyAdjustment data. 
 interface IAdjustmentData {
     rate?: number, 
     indexName?: string, 
@@ -12,192 +14,151 @@ interface IAdjustmentData {
 
 @Injectable()
 export class LeasesService {
-    
-    
-    constructor(
-        private prisma: PrismaService,
-        private indicesService: EconomicIndicesService
-    ) { }
 
-    async applyAdjustment(id: string, data: IAdjustmentData) {
-        const lease = await this.prisma.leaseContract.findUnique({ where: { id } });
-        if (!lease) throw new Error('Contrato não encontrado');
+    constructor( private leaseRepo: LeasesRepository, private indicesService: EconomicIndicesService) {}
 
+    async applyAdjustment(id: string, data: IAdjustmentData): Promise<LeaseContract> {
+        const lease = await this.leaseRepo.findById(id)
+        if (!lease) throw new NotFoundException('Contrato nao encontrado')
+        // delegate calculating to specific helper
+        const rate = await this.calculateRate(data, lease)
+
+        const oldRent = Number(lease.rentValue);
+        const newRent = oldRent * (1 + (rate / 100)); // new rent is equal to oldRent + 10%
+
+        // return updated lease
+        return await this.leaseRepo.updateAdjustmentById(id,{
+            rentValue: newRent,
+            lastAdjustmentDate: new Date(),
+            adjustmentRate: rate,
+            notes: (lease.notes || '') + `\n[${new Date().toISOString()}] Reajuste aplicado: ${rate.toFixed(2)}% (${data.indexName || 'Manual'}). Aluguel: ${oldRent} -> ${newRent.toFixed(2)}`
+            });
+    }
+
+    // used to calculate accumulated rate at leasesService.applyAdjustment
+    private async calculateRate(data: IAdjustmentData, lease: LeaseWithRelations) {
         let rate = data.rate;
-
-        // If rate not provided, calculate from index
-        if (!rate && data.indexName && lease.lastAdjustmentDate) {
-            // Calculate accumulation since last adjustment
-            const endDate = data.date ? new Date(data.date) : new Date();
-            // Start date = last adjustment OR lease start date + 1 year?
-            // Usually adjustment is annual.
-            // Let's assume start = lastAdjustmentDate
-            // If lastAdjustmentDate is null, use startDate
-            const startDate = lease.lastAdjustmentDate || lease.startDate;
-
+        // If not rate, but an index name exist. calculate from index history
+        if (!rate && data.indexName) {
+            const endDate = data.date ? new Date(data.date) : new Date(); // if no endDate use today.
+            const startDate = lease.lastAdjustmentDate || lease.startDate; // if lease never adjusted use startDate 
+            
             rate = await this.indicesService.getAccumulatedRate(data.indexName, startDate, endDate);
         }
 
-        if (rate === undefined || rate === null) {
-            throw new Error('Taxa de reajuste não pôde ser calculada. Forneça uma taxa manual ou verifique os índices.');
-        }
-
-        const oldRent = Number(lease.rentValue);
-        const newRent = oldRent * (1 + (rate / 100));
-
-        // Update Lease
-        const updatedLease = await this.prisma.leaseContract.update({
-            where: { id },
-            data: {
-                rentValue: newRent,
-                lastAdjustmentDate: new Date(),
-                adjustmentRate: rate,
-                notes: (lease.notes || '') + `\n[${new Date().toISOString()}] Reajuste aplicado: ${rate.toFixed(2)}% (${data.indexName || 'Manual'}). Aluguel: ${oldRent} -> ${newRent.toFixed(2)}`
-            }
-        });
-
-        return updatedLease;
+        // handles null and undefined.
+        if (rate == null) throw new BadRequestException('Taxa de reajuste não pôde ser calculada. Forneça uma taxa manual ou verifique os índices.');
+        return rate
     }
 
-    async create(createLeaseDto: CreateLeaseDto) {
-        const lease = await this.prisma.leaseContract.create({
-            data: createLeaseDto,
-        });
 
-        // Generate Invoices for the duration
+    async create(input: ICreateLeaseInput) {
+        const leaseData = {
+            type: input.type,
+            startDate: input.startDate,
+            endDate: input.endDate,
+            rentValue: input.rentValue,
+            rentDueDay: input.rentDueDay,
+            adjustmentRate: input.adjustmentRate,
+            adjustmentIndex: input.adjustmentIndex,
+            autoRenew: input.autoRenew,
+            notes: input.notes,
+            propertyId: input.propertyId,
+            tenantId: input.tenantId,
+            guarantorId: input.guarantorId,
+            };
+
+        const invoiceDrafts = this.buildInitialRentInvoiceDrafts(input);
+
+        return this.leaseRepo.createWithInitialInvoices(leaseData, invoiceDrafts);
+    }
+
+    // parse incoming lease dates as business dates (date-only), not UTC timestamps
+    private parseBusinessDate(value: Date | string) {
+        if (value instanceof Date) return new Date(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate());
+
+        const [year, month, day] = value.split('T')[0].split('-').map(Number);
+        return new Date(year, month - 1, day);
+    }
+
+    // handles building initial invoice draft when lease is created.
+    private buildInitialRentInvoiceDrafts(input: ICreateLeaseInput) {
         const invoices = [];
-        let currentDate = new Date(lease.startDate);
-        const endDate = new Date(lease.endDate);
-        const dueDay = lease.rentDueDay || 5;
+        const startDate = this.parseBusinessDate(input.startDate);
+        const endDate = this.parseBusinessDate(input.endDate);
+        const dueDay = input.rentDueDay || 5; // if due day not specified fallback to the 5th
 
-        // Advance to first due date (next month or same month if day < dueDay?)
-        // Simple logic: First Rent is due on the first occurrence of 'dueDay' after startDate.
-        // If startDate is 2024-01-01 and dueDay is 5, first rent is 2024-01-05? Or 02-05?
-        // Usually, rent is prepaid or postpaid. Let's assume postpaid (next month).
-        // Actually user said "VENCIMENTO DOS ALUGUEIS".
-        // Let's generate for each month.
-
-        // Normalize currentDate to start of month to avoid overflow issues
-        let iteratorDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+        // Always start at the 1st of the month
+        let iteratorDate = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
 
         while (iteratorDate < endDate) {
-            // Calculate due date for this month
-            // We want the DueDay of this month or next?
-            // Let's say we generate 1 invoice for each month the contract is active.
+            const targetMonth = iteratorDate.getMonth();
+            const targetYear = iteratorDate.getFullYear();
 
-            let targetMonth = iteratorDate.getMonth();
-            let targetYear = iteratorDate.getFullYear();
-
-            // Check if we should generate for this month (if lease starts mid-month, maybe first due is next month?)
-            // Let's stick to: One invoice per month. Due date = dueDay. 
-            // If startDate > dueDay, maybe first invoice is next month.
-
+            // built invoice due date for target month
             let tempDueDate = new Date(targetYear, targetMonth, dueDay);
 
-            // If calculated due date is before start date, skip to next month (or it's pro-rata, but let's keep simple)
-            if (tempDueDate < new Date(lease.startDate)) {
-                tempDueDate = new Date(targetYear, targetMonth + 1, dueDay);
-                // updating iterator is dangerous here if we don't align
-            }
-
-            // Safety break 
+            //if due date is before the lease started push to the same day on next month
+            if (tempDueDate < startDate) tempDueDate = new Date(targetYear, targetMonth + 1, dueDay);
+            
+            // stop if due date goes after lease end date. but only after at least 1 inovice was created
             if (tempDueDate > endDate && invoices.length > 0) break;
 
+            // add to invoices aray
             invoices.push({
-                type: 'RENT',
-                description: `Aluguel ${targetMonth + 1}/${targetYear}`,
-                amount: lease.rentValue,
-                dueDate: tempDueDate,
-                status: 'PENDING',
-                leaseId: lease.id,
-                propertyId: lease.propertyId,
+            type: 'RENT' as const,
+            description: `Aluguel ${targetMonth + 1}/${targetYear}`,
+            amount: input.rentValue,
+            dueDate: tempDueDate,
+            status: 'PENDING' as const,
+            propertyId: input.propertyId,
             });
-
-            // Move to next month
+            
+            // Move to next month and repeat (I + 1)
             iteratorDate.setMonth(iteratorDate.getMonth() + 1);
         }
 
-        // Batch create invoices
-        // We need to cast type to the Enum compatible string or use 'RENT' if it matches
-        if (invoices.length > 0) {
-            await this.prisma.invoice.createMany({
-                data: invoices as any
-            });
-        }
-
-        return lease;
+        return invoices;
     }
 
     async findAll() {
-        const leases = await this.prisma.leaseContract.findMany({
-            where: {
-                property: {
-                    deletedAt: null
-                }
-            },
-            include: {
-                property: true,
-                tenant: true,
-                guarantor: true,
-            },
-        });
-
-        // Lazy update for expiration
+        const leases = await this.leaseRepo.findAll();
         const now = new Date();
-        for (const lease of leases) {
-            await this.checkExpiration(lease, now);
-        }
-
+        
+        for (const lease of leases) await this.checkExpiration(lease, now);
         return leases;
-    }
+        }
 
     async findOne(id: string) {
-        const lease = await this.prisma.leaseContract.findUnique({
-            where: { id },
-            include: {
-                property: true,
-                tenant: true,
-                guarantor: true,
-            },
-        });
-
-        if (lease) {
-            await this.checkExpiration(lease, new Date());
-        }
-
+        const lease = await this.leaseRepo.findById(id);
+        if (lease) await this.checkExpiration(lease, new Date());
         return lease;
-    }
-
-    private async checkExpiration(lease: any, now: Date) {
-        if (lease.isActive && new Date(lease.endDate) < now) {
-            if (lease.autoRenew) {
-                // Auto Renew: Add 1 year
-                const newEndDate = new Date(lease.endDate);
-                newEndDate.setFullYear(newEndDate.getFullYear() + 1);
-
-                await this.prisma.leaseContract.update({
-                    where: { id: lease.id },
-                    data: {
-                        endDate: newEndDate,
-                        notes: (lease.notes || '') + `\n[System] Auto-renewed on ${now.toISOString()} until ${newEndDate.toISOString()}`
-                    }
-                });
-                lease.endDate = newEndDate;
-                // TODO: Generate new invoices for the renewed period
-            } else {
-                await this.prisma.leaseContract.update({
-                    where: { id: lease.id },
-                    data: { isActive: false }
-                });
-                lease.isActive = false;
-            }
         }
+
+    private async checkExpiration(lease: LeaseWithRelations, now: Date) {
+        if (!lease.isActive || new Date(lease.endDate) >= now) return;
+        
+        if (lease.autoRenew) {
+            const newEndDate = new Date(lease.endDate);
+            newEndDate.setFullYear(newEndDate.getFullYear() + 1);
+
+            const notes =
+            (lease.notes || '') +
+            `\n[System] Auto-renewed on ${now.toISOString()} until ${newEndDate.toISOString()}`;
+
+            await this.leaseRepo.renewById(lease.id, newEndDate, notes);
+
+            lease.endDate = newEndDate;
+            lease.notes = notes;
+            return;
+        }
+
+        // if not auto renew inactive the lease
+        await this.leaseRepo.markInactive(lease.id);
+        lease.isActive = false;
     }
 
-    update(id: string, body: any) {
-        return this.prisma.leaseContract.update({
-            where: { id },
-            data: body,
-        })
+    update(id: string, data: UpdateLeaseRecordData) {
+        return this.leaseRepo.updateById(id, data);
     }
 }
