@@ -1,48 +1,45 @@
 import { useState, useEffect } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import { Search, MapPin, Bed, Bath, ArrowRight, Loader2 } from 'lucide-react';
-import { SiteConfig } from '../../api';
+import { api, type Property, type SiteConfig } from '../../api';
 
 export default function HomePage() {
     const { config } = useOutletContext<{ config: SiteConfig | null }>();
-    const [properties, setProperties] = useState<any[]>([]);
+    const [properties, setProperties] = useState<Property[]>([]);
     const [loading, setLoading] = useState(true);
-    const [filter, setFilter] = useState('ALL'); // ALL, RENT, SELL
+    const [filter, setFilter] = useState('ALL');
     const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {
         const fetchProperties = async () => {
             try {
-                // Fetching properties. ideally this should be a public endpoint.
-                const res = await fetch('/api/properties');
-                if (res.ok) {
-                    const data = await res.json();
-                    setProperties(data);
-                }
+                const data = await api.properties.findAll();
+                setProperties(data);
             } catch (error) {
                 console.error('Failed to fetch properties', error);
             } finally {
                 setLoading(false);
             }
         };
+
         fetchProperties();
     }, []);
 
-    const filteredProperties = properties.filter(p => {
-        // Site Config Filter: Hide unavailable if configured
-        if (config && !config.showUnavailable && p.status !== 'AVAILABLE') {
-            // Assuming status field exists or using type check logic
-            // If we don't have explicit status on public list, we might need to rely on backend filtering.
-            // But for now, let's assume we show everything unless filtering logic is complex.
-            // Actually, usually 'rented' properties shouldn't be shown if showUnavailable is false.
-            // Let's assume 'leases' count > 0 implies rented? Or manually set status.
-            // For safety, if we don't know status, show it.
-        }
+    const filteredProperties = properties.filter((p) => {
+        const matchesFilter =
+            filter === 'ALL' ||
+            (filter === 'RENT' && p.type === 'RENT') ||
+            (filter === 'SELL' && p.type === 'SALE');
 
-        const matchesFilter = filter === 'ALL' || (filter === 'RENT' && p.type === 'RENT') || (filter === 'SELL' && p.type === 'SALE');
-        const matchesSearch = !searchTerm ||
-            (p.addressString && p.addressString.toLowerCase().includes(searchTerm.toLowerCase())) ||
-            (p.type && p.type.toLowerCase().includes(searchTerm.toLowerCase()));
+        const normalizedSearch = searchTerm.toLowerCase();
+        const matchesSearch =
+            !searchTerm ||
+            p.address?.toLowerCase().includes(normalizedSearch) ||
+            p.nickname?.toLowerCase().includes(normalizedSearch) ||
+            p.city?.toLowerCase().includes(normalizedSearch) ||
+            p.state?.toLowerCase().includes(normalizedSearch) ||
+            p.type?.toLowerCase().includes(normalizedSearch);
+
         return matchesFilter && matchesSearch;
     });
 
@@ -53,15 +50,11 @@ export default function HomePage() {
 
     return (
         <div>
-            {/* Hero Section */}
             <div className="relative bg-slate-900 py-24 sm:py-32">
                 <div className="absolute inset-0 overflow-hidden">
-                    <img
-                        src={heroBg}
-                        alt="Background"
-                        className="w-full h-full object-cover opacity-20"
-                    />
+                    <img src={heroBg} alt="Background" className="w-full h-full object-cover opacity-20" />
                 </div>
+
                 <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
                     <h1 className="text-4xl sm:text-6xl font-extrabold text-white tracking-tight mb-6 animate-fade-in-up">
                         {heroTitle}
@@ -70,7 +63,6 @@ export default function HomePage() {
                         {heroSubtitle}
                     </p>
 
-                    {/* Search Bar */}
                     <div className="max-w-3xl mx-auto bg-white rounded-full p-2 flex items-center shadow-2xl">
                         <div className="flex-1 px-4 relative">
                             <MapPin className="absolute left-4 top-3 text-gray-400 w-5 h-5" />
@@ -93,13 +85,13 @@ export default function HomePage() {
                 </div>
             </div>
 
-            {/* Properties Grid */}
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
                 <div className="flex justify-between items-end mb-8">
                     <div>
                         <h2 className="text-3xl font-bold text-gray-900">Imóveis em Destaque</h2>
                         <p className="text-gray-600 mt-2">Confira as melhores oportunidades selecionadas para você.</p>
                     </div>
+
                     <div className="flex gap-2 bg-gray-100 p-1 rounded-lg">
                         {['ALL', 'RENT', 'SELL'].map((f) => (
                             <button
@@ -128,12 +120,13 @@ export default function HomePage() {
                                         alt="Property"
                                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                                     />
+
                                     <div className="absolute top-4 left-4">
-                                        <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider text-white ${property.type === 'RENT' ? 'bg-blue-500' : 'bg-green-500'
-                                            }`}>
+                                        <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider text-white ${property.type === 'RENT' ? 'bg-blue-500' : 'bg-green-500'}`}>
                                             {property.type === 'RENT' ? 'Aluguel' : property.type === 'SALE' ? 'Venda' : 'Disponível'}
                                         </span>
                                     </div>
+
                                     <div className="absolute bottom-4 left-4 right-4 flex justify-between items-end">
                                         <h3 className="text-white font-bold text-xl drop-shadow-md">
                                             {config?.showPrices !== false ? (
@@ -146,18 +139,31 @@ export default function HomePage() {
                                 </div>
 
                                 <div className="p-6">
-                                    <h4 className="text-lg font-bold text-gray-900 mb-1 truncate">{property.nickname || property.address}</h4>
-                                    {property.city && <p className="text-sm text-gray-500 mb-3"><MapPin size={14} className="inline mr-1" />{property.city} - {property.state}</p>}
-                                    {!property.city && <p className="text-sm text-gray-500 mb-3"><MapPin size={14} className="inline mr-1" />{property.address}</p>}
+                                    <h4 className="text-lg font-bold text-gray-900 mb-1 truncate">
+                                        {property.nickname || property.address}
+                                    </h4>
+
+                                    {property.city ? (
+                                        <p className="text-sm text-gray-500 mb-3">
+                                            <MapPin size={14} className="inline mr-1" />
+                                            {property.city} - {property.state}
+                                        </p>
+                                    ) : (
+                                        <p className="text-sm text-gray-500 mb-3">
+                                            <MapPin size={14} className="inline mr-1" />
+                                            {property.address}
+                                        </p>
+                                    )}
 
                                     <div className="flex items-center gap-4 text-gray-500 text-sm mb-6">
-                                        {property.bedrooms > 0 && (
+                                        {(property.bedrooms ?? 0) > 0 && (
                                             <div className="flex items-center gap-1">
                                                 <Bed size={16} />
                                                 <span>{property.bedrooms}</span>
                                             </div>
                                         )}
-                                        {property.bathrooms > 0 && (
+
+                                        {(property.bathrooms ?? 0) > 0 && (
                                             <div className="flex items-center gap-1">
                                                 <Bath size={16} />
                                                 <span>{property.bathrooms}</span>
@@ -184,12 +190,13 @@ export default function HomePage() {
 
 function getColorHex(colorName: string) {
     const colors: Record<string, string> = {
-        blue: '#2563eb', // blue-600
-        red: '#dc2626', // red-600
-        green: '#16a34a', // green-600
-        purple: '#9333ea', // purple-600
-        orange: '#ea580c', // orange-600
-        slate: '#475569', // slate-600
+        blue: '#2563eb',
+        red: '#dc2626',
+        green: '#16a34a',
+        purple: '#9333ea',
+        orange: '#ea580c',
+        slate: '#475569',
     };
+
     return colors[colorName] || colors.blue;
 }

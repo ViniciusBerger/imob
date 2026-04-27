@@ -2,55 +2,62 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Upload, ChevronRight, ChevronLeft, Check, DollarSign, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { api } from '../api';
 
 const STEPS = [
     { name: 'Dados Básicos', icon: FileText },
     { name: 'Características', icon: Check },
     { name: 'Financeiro', icon: DollarSign },
-    { name: 'Documentos', icon: Upload }
+    { name: 'Documentos', icon: Upload },
 ];
+
+type PropertyWizardFormData = {
+    code: string;
+    nickname?: string;
+    address: string;
+    city: string;
+    state: string;
+    type?: string;
+    description?: string;
+    builtArea?: number;
+    landArea?: number;
+    bedrooms?: number;
+    bathrooms?: number;
+    garage?: number;
+    isFinanced?: boolean;
+    financingTotalValue?: number;
+    installmentValue?: number;
+    correctionIndex?: string;
+    installmentsPaid?: number;
+    forRent?: boolean;
+    rentPrice?: number;
+    forSale?: boolean;
+    salePrice?: number;
+};
 
 export default function PropertyWizard() {
     const [currentStep, setCurrentStep] = useState(0);
-    const { register, handleSubmit, watch, formState: { errors } } = useForm();
+    const { register, handleSubmit, watch } = useForm<PropertyWizardFormData>();
     const navigate = useNavigate();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [photos, setPhotos] = useState<File[]>([]);
     const [documents, setDocuments] = useState<File[]>([]);
 
-    const onSubmit = async (data: any) => {
+    const token = sessionStorage.getItem('token') || '';
+
+    const onSubmit = async (data: PropertyWizardFormData) => {
         setIsSubmitting(true);
+
         try {
-            // 1. Create Property
-            const res = await fetch('/api/properties', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
+            const property = await api.properties.create(data, token);
 
-            if (!res.ok) throw new Error('Failed to create property');
-            const property = await res.json();
-
-            // 2. Upload Photos
             if (photos.length > 0) {
-                const formData = new FormData();
-                photos.forEach(p => formData.append('files', p));
-                await fetch(`/api/properties/${property.id}/photos`, {
-                    method: 'PATCH',
-                    body: formData
-                });
+                await api.properties.uploadPhotos(property.id, toFileList(photos), token);
             }
 
-            // 3. Upload Documents
             if (documents.length > 0) {
-                for (const doc of documents) {
-                    const formData = new FormData();
-                    formData.append('file', doc);
-                    formData.append('title', doc.name);
-                    await fetch(`/api/properties/${property.id}/documents`, {
-                        method: 'POST',
-                        body: formData
-                    });
+                for (const document of documents) {
+                    await api.properties.uploadDocument(property.id, document, document.name, token);
                 }
             }
 
@@ -63,8 +70,8 @@ export default function PropertyWizard() {
         }
     };
 
-    const nextStep = () => setCurrentStep(c => Math.min(c + 1, STEPS.length - 1));
-    const prevStep = () => setCurrentStep(c => Math.max(c - 1, 0));
+    const nextStep = () => setCurrentStep((current) => Math.min(current + 1, STEPS.length - 1));
+    const prevStep = () => setCurrentStep((current) => Math.max(current - 1, 0));
 
     const renderStepContent = () => {
         switch (currentStep) {
@@ -81,10 +88,12 @@ export default function PropertyWizard() {
                                 <input {...register('nickname')} className="input-field" placeholder="Ex: Casa Praia" />
                             </div>
                         </div>
+
                         <div>
                             <label className="block text-sm font-medium text-gray-700">Endereço Completo</label>
                             <input {...register('address', { required: true })} className="input-field" />
                         </div>
+
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700">Cidade</label>
@@ -95,6 +104,7 @@ export default function PropertyWizard() {
                                 <input {...register('state', { required: true })} className="input-field" />
                             </div>
                         </div>
+
                         <div>
                             <label className="block text-sm font-medium text-gray-700">Tipo</label>
                             <select {...register('type')} className="input-field">
@@ -103,12 +113,14 @@ export default function PropertyWizard() {
                                 <option value="LAND">Terreno</option>
                             </select>
                         </div>
+
                         <div>
                             <label className="block text-sm font-medium text-gray-700">Descrição</label>
                             <textarea {...register('description')} className="input-field h-24" />
                         </div>
                     </div>
                 );
+
             case 1:
                 return (
                     <div className="space-y-4 animate-fade-in">
@@ -122,6 +134,7 @@ export default function PropertyWizard() {
                                 <input type="number" {...register('landArea', { valueAsNumber: true })} className="input-field" />
                             </div>
                         </div>
+
                         <div className="grid grid-cols-3 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700">Quartos</label>
@@ -136,14 +149,26 @@ export default function PropertyWizard() {
                                 <input type="number" {...register('garage', { valueAsNumber: true })} className="input-field" />
                             </div>
                         </div>
+
                         <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
                             <Upload className="mx-auto text-gray-400 mb-2" />
                             <p className="text-sm text-gray-500">Arraste fotos ou clique para selecionar</p>
-                            <input type="file" multiple onChange={e => setPhotos(Array.from(e.target.files || []))} className="hidden" id="photo-upload" />
-                            <label htmlFor="photo-upload" className="mt-2 inline-block px-4 py-2 bg-gray-100 rounded cursor-pointer hover:bg-gray-200 text-sm">Selecionar Fotos ({photos.length})</label>
+
+                            <input
+                                type="file"
+                                multiple
+                                onChange={(event) => setPhotos(Array.from(event.target.files || []))}
+                                className="hidden"
+                                id="photo-upload"
+                            />
+
+                            <label htmlFor="photo-upload" className="mt-2 inline-block px-4 py-2 bg-gray-100 rounded cursor-pointer hover:bg-gray-200 text-sm">
+                                Selecionar Fotos ({photos.length})
+                            </label>
                         </div>
                     </div>
                 );
+
             case 2:
                 return (
                     <div className="space-y-6 animate-fade-in">
@@ -158,7 +183,7 @@ export default function PropertyWizard() {
                             <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700">Valor Total Financiado</label>
-                                    <input type="number" {...register('totalFinancedValue', { valueAsNumber: true })} className="input-field" />
+                                    <input type="number" {...register('financingTotalValue', { valueAsNumber: true })} className="input-field" />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700">Valor Parcela</label>
@@ -188,6 +213,7 @@ export default function PropertyWizard() {
                                     <input type="number" placeholder="Valor Aluguel" {...register('rentPrice', { valueAsNumber: true })} className="mt-1 input-field text-sm" />
                                 </div>
                             </label>
+
                             <label className="flex items-center gap-2 p-4 border rounded-lg cursor-pointer hover:bg-gray-50">
                                 <input type="checkbox" {...register('forSale')} className="w-5 h-5 text-primary-600" />
                                 <div>
@@ -198,6 +224,7 @@ export default function PropertyWizard() {
                         </div>
                     </div>
                 );
+
             case 3:
                 return (
                     <div className="space-y-4 animate-fade-in">
@@ -206,17 +233,24 @@ export default function PropertyWizard() {
                             <h3 className="text-lg font-medium text-gray-900">Documentação do Imóvel</h3>
                             <p className="text-gray-500 mb-4">Anexe Escritura, Matrícula, IPTU, etc.</p>
 
-                            <input type="file" multiple onChange={e => setDocuments(Array.from(e.target.files || []))} className="hidden" id="doc-upload" />
+                            <input
+                                type="file"
+                                multiple
+                                onChange={(event) => setDocuments(Array.from(event.target.files || []))}
+                                className="hidden"
+                                id="doc-upload"
+                            />
+
                             <label htmlFor="doc-upload" className="inline-block px-6 py-3 bg-white border border-gray-300 shadow-sm rounded-lg cursor-pointer hover:bg-gray-50 font-medium text-primary-600">
                                 Escolher Arquivos
                             </label>
 
                             {documents.length > 0 && (
                                 <ul className="mt-4 text-left max-w-sm mx-auto space-y-2">
-                                    {documents.map((doc, i) => (
-                                        <li key={i} className="flex items-center gap-2 text-sm text-gray-600 bg-white p-2 rounded border">
+                                    {documents.map((document, index) => (
+                                        <li key={index} className="flex items-center gap-2 text-sm text-gray-600 bg-white p-2 rounded border">
                                             <FileText size={16} />
-                                            {doc.name}
+                                            {document.name}
                                         </li>
                                     ))}
                                 </ul>
@@ -224,37 +258,37 @@ export default function PropertyWizard() {
                         </div>
                     </div>
                 );
-            default: return null;
+
+            default:
+                return null;
         }
-    }
+    };
 
     return (
         <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden">
-            {/* Steps Header */}
             <div className="bg-gray-50 border-b border-gray-100 p-4">
                 <div className="flex justify-between items-center">
-                    {STEPS.map((step, idx) => {
+                    {STEPS.map((step, index) => {
                         const Icon = step.icon;
-                        const isActive = idx === currentStep;
-                        const isCompleter = idx < currentStep;
+                        const isActive = index === currentStep;
+                        const isComplete = index < currentStep;
+
                         return (
-                            <div key={idx} className={`flex flex-col items-center gap-2 flex-1 ${isActive ? 'text-primary-600' : 'text-gray-400'}`}>
-                                <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${isActive ? 'bg-primary-600 text-white shadow-lg scale-110' : isCompleter ? 'bg-green-500 text-white' : 'bg-gray-200'}`}>
+                            <div key={step.name} className={`flex flex-col items-center gap-2 flex-1 ${isActive ? 'text-primary-600' : 'text-gray-400'}`}>
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${isActive ? 'bg-primary-600 text-white shadow-lg scale-110' : isComplete ? 'bg-green-500 text-white' : 'bg-gray-200'}`}>
                                     <Icon size={20} />
                                 </div>
                                 <span className="text-xs font-semibold hidden sm:block">{step.name}</span>
                             </div>
-                        )
+                        );
                     })}
                 </div>
             </div>
 
-            {/* Content */}
             <div className="p-8 min-h-[400px]">
                 {renderStepContent()}
             </div>
 
-            {/* Footer */}
             <div className="bg-gray-50 border-t border-gray-100 p-6 flex justify-between">
                 <button onClick={prevStep} disabled={currentStep === 0} className="btn-secondary flex items-center gap-2 disabled:opacity-50">
                     <ChevronLeft size={20} />
@@ -275,4 +309,14 @@ export default function PropertyWizard() {
             </div>
         </div>
     );
+}
+
+function toFileList(files: File[]) {
+    const dataTransfer = new DataTransfer();
+
+    files.forEach((file) => {
+        dataTransfer.items.add(file);
+    });
+
+    return dataTransfer.files;
 }

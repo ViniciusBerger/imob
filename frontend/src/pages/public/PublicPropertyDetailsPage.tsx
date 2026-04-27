@@ -1,29 +1,40 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { MapPin, Bed, Bath, ArrowLeft, MessageCircle, Maximize, Ruler } from 'lucide-react';
+import { api, type Property } from '../../api';
+
+type PublicProperty = Property & {
+    addressString?: string;
+    value?: number | string;
+    builtArea?: number | string;
+    landArea?: number | string;
+};
 
 export default function PublicPropertyDetailsPage() {
     const { id } = useParams();
-    const [property, setProperty] = useState<any>(null);
+    const [property, setProperty] = useState<PublicProperty | null>(null);
 
     useEffect(() => {
         const fetchProperty = async () => {
+            if (!id) return;
+
             try {
-                const res = await fetch(`/api/properties/${id}`);
-                if (res.ok) {
-                    const data = await res.json();
-                    setProperty(data);
-                }
+                const data = await api.properties.findOne(id);
+                setProperty(data);
             } catch (error) {
                 console.error('Failed to fetch property details', error);
             }
         };
+
         fetchProperty();
     }, [id]);
 
     if (!property) return <div className="min-h-screen flex items-center justify-center">Carregando...</div>;
 
-    const whatsappMessage = `Olá! Gostaria de saber mais sobre o imóvel em ${property.addressString} (ID: ${property.id}).`;
+    const displayAddress = property.addressString || property.address;
+    const displayValue = property.value || property.rentPrice || property.salePrice || 0;
+
+    const whatsappMessage = `Olá! Gostaria de saber mais sobre o imóvel em ${displayAddress} (ID: ${property.id}).`;
     const whatsappLink = `https://wa.me/5551998861124?text=${encodeURIComponent(whatsappMessage)}`;
 
     return (
@@ -35,7 +46,7 @@ export default function PublicPropertyDetailsPage() {
                         <ArrowLeft size={20} />
                         Voltar para a busca
                     </Link>
-                    <h1 className="text-3xl font-bold text-gray-900">{property.addressString}</h1>
+                    <h1 className="text-3xl font-bold text-gray-900">{displayAddress}</h1>
                     <div className="flex items-center gap-2 text-gray-500 mt-2">
                         <MapPin size={18} />
                         <span>{property.city || 'Cidade não informada'} - {property.state || 'UF'}</span>
@@ -54,6 +65,7 @@ export default function PublicPropertyDetailsPage() {
                                 className="w-full h-full object-cover"
                             />
                         </div>
+
                         {property.photos && property.photos.length > 1 && (
                             <div className="grid grid-cols-4 gap-4">
                                 {property.photos.slice(1, 5).map((photo: string, index: number) => (
@@ -69,9 +81,11 @@ export default function PublicPropertyDetailsPage() {
                     <div className="space-y-8">
                         <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
                             <div className="mb-6">
-                                <span className="text-sm text-gray-500 uppercase font-semibold tracking-wider">Valor do {property.type === 'RENT' ? 'Aluguel' : 'Venda'}</span>
+                                <span className="text-sm text-gray-500 uppercase font-semibold tracking-wider">
+                                    Valor do {property.type === 'RENT' ? 'Aluguel' : 'Venda'}
+                                </span>
                                 <div className="text-4xl font-bold text-primary-600 mt-1">
-                                    R$ {property.value?.toLocaleString('pt-BR')}
+                                    R$ {Number(displayValue).toLocaleString('pt-BR')}
                                 </div>
                             </div>
 
@@ -92,18 +106,21 @@ export default function PublicPropertyDetailsPage() {
                             <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
                                 <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
                                     <Bed className="text-primary-500" size={20} />
-                                    <span className="font-semibold">{property.bedrooms} Quartos</span>
+                                    <span className="font-semibold">{property.bedrooms || 0} Quartos</span>
                                 </div>
+
                                 <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
                                     <Bath className="text-primary-500" size={20} />
-                                    <span className="font-semibold">{property.bathrooms} Banheiros</span>
+                                    <span className="font-semibold">{property.bathrooms || 0} Banheiros</span>
                                 </div>
+
                                 {property.builtArea && (
                                     <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
                                         <Maximize className="text-primary-500" size={20} />
                                         <span className="font-semibold">{property.builtArea} m² Útil</span>
                                     </div>
                                 )}
+
                                 {property.landArea && (
                                     <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
                                         <Ruler className="text-primary-500" size={20} />
@@ -118,8 +135,6 @@ export default function PublicPropertyDetailsPage() {
                                     <p className="text-gray-600 leading-relaxed whitespace-pre-line">{property.description}</p>
                                 </div>
                             )}
-
-                            {/* Features placeholder if exists */}
                         </div>
                     </div>
                 </div>

@@ -7,10 +7,11 @@ export const propertiesApi = {
         return res.json();
     },
 
-    findOne: async (id: string, token: string) => {
+    findOne: async (id: string, token?: string) => {
         const res = await fetch(`${API_URL}/properties/${id}`, {
-            headers: { Authorization: `Bearer ${token}` },
+            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         });
+
         if (!res.ok) throw new Error('Failed to fetch property');
         return res.json();
     },
