@@ -2,7 +2,11 @@ import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@n
 import { MaintenanceService } from './maintenance.service';
 import { CreateMaintenanceDto } from './dto/create-maintenance.dto';
 import { AuthGuard } from '@nestjs/passport';
-import { RolesGuard } from 'src/auth/roles/roles.guard';
+import { RolesGuard } from '../auth/roles/roles.guard';
+import {
+    CreateMaintenanceRecordData,
+    UpdateMaintenanceRecordData,
+} from './repository/maintenance-prisma.interface';
 
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @Controller('maintenance')
@@ -11,7 +15,16 @@ export class MaintenanceController {
 
     @Post()
     create(@Body() createMaintenanceDto: CreateMaintenanceDto) {
-        return this.maintenanceService.create(createMaintenanceDto);
+        const input: CreateMaintenanceRecordData = {
+            title: createMaintenanceDto.title,
+            description: createMaintenanceDto.description,
+            scheduledDate: createMaintenanceDto.scheduledDate,
+            status: createMaintenanceDto.status,
+            cost: createMaintenanceDto.cost,
+            propertyId: createMaintenanceDto.propertyId,
+        };
+
+        return this.maintenanceService.create(input);
     }
 
     @Get()
@@ -26,7 +39,16 @@ export class MaintenanceController {
 
     @Patch(':id')
     update(@Param('id') id: string, @Body() updateMaintenanceDto: any) {
-        return this.maintenanceService.update(id, updateMaintenanceDto);
+        const data: UpdateMaintenanceRecordData = {
+            title: updateMaintenanceDto.title,
+            description: updateMaintenanceDto.description,
+            scheduledDate: updateMaintenanceDto.scheduledDate,
+            status: updateMaintenanceDto.status,
+            cost: updateMaintenanceDto.cost,
+            propertyId: updateMaintenanceDto.propertyId,
+        };
+
+        return this.maintenanceService.update(id, data);
     }
 
     @Patch(':id/complete')

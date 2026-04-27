@@ -3,7 +3,7 @@ import { InvoicesController } from './invoices.controller';
 import { InvoicesService } from './invoices.service';
 import { PrismaService } from '../prisma.service';
 import { INVOICES_REPOSITORY } from './repository/invoices-prisma.interface';
-import { InvoicesPrismaRepository } from './repository/invoices-prisma.repository';
+import { InvoicesRepository } from './repository/invoices-prisma.repository';
 
 /**
  * Invoices module.
@@ -18,11 +18,7 @@ import { InvoicesPrismaRepository } from './repository/invoices-prisma.repositor
   providers: [
     InvoicesService,
     PrismaService,
-    InvoicesPrismaRepository,
-    {
-      provide: INVOICES_REPOSITORY,
-      useClass: InvoicesPrismaRepository,
-    },
+    InvoicesRepository,
   ],
   exports: [INVOICES_REPOSITORY],
 })

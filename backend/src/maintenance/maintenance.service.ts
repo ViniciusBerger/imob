@@ -1,65 +1,41 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma.service';
-import { CreateMaintenanceDto } from './dto/create-maintenance.dto';
+import { MaintenancePrismaRepository } from './repository/maintenance-prisma.repository';
+import {
+    CreateMaintenanceRecordData,
+    UpdateMaintenanceRecordData,
+} from './repository/maintenance-prisma.interface';
 
 @Injectable()
 export class MaintenanceService {
-    constructor(private prisma: PrismaService) { }
+    constructor(private maintenanceRepo: MaintenancePrismaRepository) { }
 
-    create(createMaintenanceDto: CreateMaintenanceDto) {
-        return this.prisma.maintenance.create({
-            data: createMaintenanceDto,
-        });
+    // handles creating one maintenance item
+    create(input: CreateMaintenanceRecordData) {
+        return this.maintenanceRepo.create(input);
     }
 
+    // handles finding all maintenance items
     findAll() {
-        return this.prisma.maintenance.findMany({
-            include: { property: true },
-        });
+        return this.maintenanceRepo.findAll();
     }
 
+    // handles finding one maintenance item by id
     findOne(id: string) {
-        return this.prisma.maintenance.findUnique({
-            where: { id },
-            include: { property: true },
-        });
+        return this.maintenanceRepo.findById(id);
     }
 
-    async update(id: string, updateMaintenanceDto: any) {
-        return this.prisma.maintenance.update({
-            where: { id },
-            data: updateMaintenanceDto,
-        });
+    // handles updating one maintenance item by id
+    update(id: string, data: UpdateMaintenanceRecordData) {
+        return this.maintenanceRepo.updateById(id, data);
     }
 
-    async complete(id: string, createInvoice: boolean) {
-        const maintenance = await this.prisma.maintenance.update({
-            where: { id },
-            data: { status: 'COMPLETED' },
-            include: { property: true }
-        });
-
-        if (createInvoice && maintenance.cost && Number(maintenance.cost) > 0) {
-            // Create Expense Invoice
-            await this.prisma.invoice.create({
-                data: {
-                    type: 'EXPENSE',
-                    description: `Manutenção: ${maintenance.title}`,
-                    amount: maintenance.cost,
-                    dueDate: new Date(), // Due today?
-                    status: 'PENDING',
-                    propertyId: maintenance.propertyId,
-                    approvalStatus: 'PENDING'
-                }
-            });
-        }
-
-        return maintenance;
+    // handles completing maintenance and optionally creating expense invoice
+    complete(id: string, createInvoice: boolean) {
+        return this.maintenanceRepo.complete(id, createInvoice);
     }
 
+    // handles removing one maintenance item by id
     remove(id: string) {
-        return this.prisma.maintenance.delete({
-            where: { id },
-        });
+        return this.maintenanceRepo.removeById(id);
     }
 }

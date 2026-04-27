@@ -21,7 +21,7 @@ import {
  * This class should NOT own business rules.
  */
 @Injectable()
-export class InvoicesPrismaRepository implements IInvoicesRepository {
+export class InvoicesRepository implements IInvoicesRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   /**

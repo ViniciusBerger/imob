@@ -27,6 +27,8 @@ export class CreateMaintenanceDto {
     @IsOptional()
     cost?: number;
 
+    priority: string
+
     @IsBoolean()
     @IsOptional()
     isRecurring?: boolean;

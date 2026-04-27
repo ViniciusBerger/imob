@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma.service';
-import { InvoicesPrismaRepository } from '../invoices-prisma.repository';
+import { InvoicesRepository } from '../invoices-prisma.repository';
 import { invoiceWithRelationsInclude } from '../invoices-prisma.interface';
 
 /**
@@ -12,7 +12,7 @@ import { invoiceWithRelationsInclude } from '../invoices-prisma.interface';
  * - avoid DB setup during active refactor
  */
 describe('InvoicesPrismaRepository', () => {
-  let repository: InvoicesPrismaRepository;
+  let repository: InvoicesRepository;
   let prisma: {
     invoice: {
       create: jest.Mock;
@@ -34,7 +34,7 @@ describe('InvoicesPrismaRepository', () => {
       },
     };
 
-    repository = new InvoicesPrismaRepository(prisma as unknown as PrismaService);
+    repository = new InvoicesRepository(prisma as unknown as PrismaService);
   });
 
   describe('create', () => {

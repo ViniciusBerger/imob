@@ -2,7 +2,12 @@ import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } f
 import { InvoicesService } from './invoices.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { AuthGuard } from '@nestjs/passport';
-import { RolesGuard } from 'src/auth/roles/roles.guard';
+import { RolesGuard } from '../auth/roles/roles.guard';
+import {
+    CreateInvoiceRecordData,
+    FindInvoicesFilters,
+    UpdateInvoiceRecordData,
+} from './repository/invoices-prisma.interface';
 
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @Controller('invoices')
@@ -11,12 +16,29 @@ export class InvoicesController {
 
     @Post()
     create(@Body() createInvoiceDto: CreateInvoiceDto) {
-        return this.invoicesService.create(createInvoiceDto);
+        const input: CreateInvoiceRecordData = {
+            type: createInvoiceDto.type,
+            description: createInvoiceDto.description,
+            amount: createInvoiceDto.amount,
+            dueDate: createInvoiceDto.dueDate,
+            status: createInvoiceDto.status,
+            leaseId: createInvoiceDto.leaseId,
+            propertyId: createInvoiceDto.propertyId,
+        };
+
+        return this.invoicesService.create(input);
     }
 
     @Get()
     findAll(@Query() query: any) {
-        return this.invoicesService.findAll(query);
+        const filters: FindInvoicesFilters = {
+            leaseId: query.leaseId,
+            propertyId: query.propertyId,
+            status: query.status,
+            type: query.type,
+        };
+
+        return this.invoicesService.findAll(filters);
     }
 
     @Get(':id')
@@ -26,7 +48,21 @@ export class InvoicesController {
 
     @Patch(':id')
     update(@Param('id') id: string, @Body() updateInvoiceDto: any) {
-        return this.invoicesService.update(id, updateInvoiceDto);
+        const data: UpdateInvoiceRecordData = {
+            type: updateInvoiceDto.type,
+            description: updateInvoiceDto.description,
+            amount: updateInvoiceDto.amount,
+            dueDate: updateInvoiceDto.dueDate,
+            status: updateInvoiceDto.status,
+            approvalStatus: updateInvoiceDto.approvalStatus,
+            paidAt: updateInvoiceDto.paidAt,
+            paidAmount: updateInvoiceDto.paidAmount,
+            notes: updateInvoiceDto.notes,
+            leaseId: updateInvoiceDto.leaseId,
+            propertyId: updateInvoiceDto.propertyId,
+        };
+
+        return this.invoicesService.update(id, data);
     }
 
     @Patch(':id/pay')

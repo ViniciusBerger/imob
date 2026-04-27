@@ -1,79 +1,45 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma.service';
-import { CreateInvoiceDto, InvoiceStatus } from './dto/create-invoice.dto';
+import { InvoicesRepository } from './repository/invoices-prisma.repository';
+import {
+    CreateInvoiceRecordData,
+    FindInvoicesFilters,
+    UpdateInvoiceRecordData,
+} from './repository/invoices-prisma.interface';
 
 @Injectable()
 export class InvoicesService {
-    constructor(private prisma: PrismaService) { }
+    constructor(private invoiceRepo: InvoicesRepository) { }
 
-    create(createInvoiceDto: CreateInvoiceDto) {
-        return this.prisma.invoice.create({
-            data: createInvoiceDto,
-        });
+    // handles creating a invoice delegating persistence to the repository
+    create(input: CreateInvoiceRecordData) {
+        return this.invoiceRepo.create(input);
     }
 
-    findAll(filters?: any) {
-        const where: any = {
-            deletedAt: null,
-            OR: [
-                { property: { deletedAt: null } },
-                { lease: { property: { deletedAt: null } } }
-            ]
-        };
-
-        if (filters?.leaseId) where.leaseId = filters.leaseId;
-        if (filters?.propertyId) where.propertyId = filters.propertyId;
-        if (filters?.status) where.status = filters.status;
-
-        if (filters?.type) {
-            if (filters.type === 'PAYABLE') {
-                where.type = { in: ['INSTALLMENT', 'EXPENSE'] };
-            } else if (filters.type === 'RECEIVABLE') {
-                where.type = 'RENT';
-            } else {
-                where.type = filters.type;
-            }
-        }
-
-        return this.prisma.invoice.findMany({
-            where,
-            include: {
-                lease: { include: { property: true, tenant: true } },
-                property: true
-            },
-            orderBy: { dueDate: 'asc' }
-        });
+    // handles finding all invoices delegating filtering logic to the repository
+    findAll(filters?: FindInvoicesFilters) {
+        return this.invoiceRepo.findAll(filters);
     }
 
+    // handles finding one invoice by id
     findOne(id: string) {
-        return this.prisma.invoice.findUnique({
-            where: { id },
-            include: { lease: { include: { property: true, tenant: true } } },
-        });
+        return this.invoiceRepo.findById(id);
     }
 
-    update(id: string, updateInvoiceDto: any) {
-        return this.prisma.invoice.update({
-            where: { id },
-            data: updateInvoiceDto,
-        });
+    // handles updating a invoice by id
+    update(id: string, data: UpdateInvoiceRecordData) {
+        return this.invoiceRepo.updateById(id, data);
     }
 
+    // handles marking a invoice as paid
     markAsPaid(id: string, paidAmount: number, notes?: string) {
-        return this.prisma.invoice.update({
-            where: { id },
-            data: {
-                status: InvoiceStatus.PAID,
-                paidAt: new Date(),
-                paidAmount,
-                notes
-            }
-        })
+        return this.invoiceRepo.markAsPaidById(id, {
+            paidAmount,
+            notes,
+        });
     }
 
+    // handles removing a invoice by id
     remove(id: string) {
-        return this.prisma.invoice.delete({
-            where: { id },
-        });
+        return this.invoiceRepo.removeById(id);
     }
 }

@@ -1,116 +1,83 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma.service';
 import { CreatePropertyDto } from './dto/create-property.dto';
+import { PropertiesRepository } from './repository/properties-prisma.repository';
+import {
+    CreateExpenseRecordData,
+    CreatePropertyExpenseRecordData,
+    CreatePropertyRecordData,
+    UpdatePropertyRecordData,
+} from './repository/properties-prisma.interface';
 
 @Injectable()
 export class PropertiesService {
-    constructor(private prisma: PrismaService) { }
+    constructor(private propertiesRepo: PropertiesRepository) { }
 
+    // handles creating one property
     create(createPropertyDto: CreatePropertyDto) {
-        // Prisma will ignore undefined fields, but we should make sure photos is an array
-        const { photos, ...rest } = createPropertyDto;
-        return this.prisma.property.create({
-            data: {
-                ...rest,
-                photos: photos || [],
-            },
-        });
+        const input: CreatePropertyRecordData = {
+            ...createPropertyDto,
+            photos: createPropertyDto.photos || [],
+        };
+
+        return this.propertiesRepo.create(input);
     }
 
+    // handles finding all properties
     findAll() {
-        return this.prisma.property.findMany({});
+        return this.propertiesRepo.findAll();
     }
 
+    // handles finding one property by id
     findOne(id: string) {
-        return this.prisma.property.findUnique({
-            where: { id },
-            include: {
-                leases: {
-                    include: {
-                        tenant: true,
-                        invoices: true
-                    }
-                },
-                documents: true,
-                maintenances: true,
-                expenses: true,
-                propertyExpenses: true,
-                notes: true,
-                invoices: true,
-            },
-        });
+        return this.propertiesRepo.findById(id);
     }
 
+    // handles adding photos to one property
     addPhotos(id: string, newPhotos: string[]) {
-        return this.prisma.property.update({
-            where: { id },
-            data: {
-                photos: {
-                    push: newPhotos
-                }
-            }
-        })
+        return this.propertiesRepo.addPhotos(id, newPhotos);
     }
 
-    // New method for PropertyDocument
-    async addDocument(propertyId: string, title: string, filePath: string, fileType: string) {
-        return this.prisma.propertyDocument.create({
-            data: {
-                title,
-                filePath,
-                fileType,
-                propertyId
-            }
-        })
-    }
-
-    // Financing/Financial updates are handled via general update
-    update(id: string, updatePropertyDto: any) {
-        return this.prisma.property.update({
-            where: { id },
-            data: updatePropertyDto,
+    // handles creating one property document
+    addDocument(propertyId: string, title: string, filePath: string, fileType: string) {
+        return this.propertiesRepo.addDocument({
+            title,
+            filePath,
+            fileType,
+            propertyId
         });
     }
 
-    addExpense(id: string, data: any) {
-        return this.prisma.expense.create({
-            data: {
-                ...data,
-                propertyId: id
-            }
-        })
+    // handles updating one property by id
+    update(id: string, data: UpdatePropertyRecordData) {
+        return this.propertiesRepo.updateById(id, data);
     }
 
-    // Property Expense (Fixed Costs Definition)
-    async addPropertyExpense(propertyId: string, data: any) {
-        return this.prisma.propertyExpense.create({
-            data: {
-                ...data,
-                propertyId
-            }
-        });
+    // handles creating one property expense ledger entry
+    addExpense(id: string, data: CreateExpenseRecordData) {
+        return this.propertiesRepo.addExpense(id, data);
     }
 
-    async removePropertyExpense(id: string) {
-        return this.prisma.propertyExpense.delete({
-            where: { id }
-        });
+    // handles creating one fixed property expense
+    addPropertyExpense(propertyId: string, data: CreatePropertyExpenseRecordData) {
+        return this.propertiesRepo.addPropertyExpense(propertyId, data);
     }
 
+    // handles removing one fixed property expense
+    removePropertyExpense(id: string) {
+        return this.propertiesRepo.removePropertyExpense(id);
+    }
+
+    // handles creating one property note
     addNote(id: string, userId: string, content: string) {
-        return this.prisma.propertyNote.create({
-            data: {
-                content,
-                propertyId: id,
-                userId
-            }
-        })
+        return this.propertiesRepo.addNote({
+            content,
+            propertyId: id,
+            userId
+        });
     }
 
+    // handles soft deleting one property
     remove(id: string) {
-        return this.prisma.property.update({
-            where: { id },
-            data: { deletedAt: new Date() },
-        });
+        return this.propertiesRepo.removeById(id);
     }
 }
