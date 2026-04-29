@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import { randomBytes } from 'crypto';
 import { JwtService } from '@nestjs/jwt';
@@ -63,14 +63,11 @@ export class AuthService {
         return true;
     }
 
-    async resetPassword(token: string, newPassword: string):Promise<boolean> {
-        const user = await this.usersService.findByResetToken(token) 
-        const hashPassword = await bcrypt.hash(newPassword, 10) // salt 10 rounds
-        // delegate updating user to user service to keep single responsability principle.
-        const updateResponse = await this.usersService.update(user.id, { password: hashPassword, resetToken: null, resetTokenExpiry: null})
+    async resetPassword(token: string, newPassword: string) {
+    const updateResponse = await this.usersService.resetPasswordWithToken(token, newPassword);
 
-        if (updateResponse) return true
-        return false
-        
-    }
+    if (updateResponse) return true;
+
+    throw new BadRequestException('token invalido ou expirado');
+}
 }

@@ -1,90 +1,132 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma.service';
-import { CreateTenantDto } from './dto/create-tenant.dto';
+import { BadRequestException, ConflictException, Injectable, NotFoundException} from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import { UsersService } from '../users/users.service';
+import { CreateTenantDto } from './dto/create-tenant.dto';
+import {CreateTenantRecordData, UpdateTenantRecordData } from './repository/tenants-repository.interface';
+import { TenantsRepository } from './repository/tenants-prisma.repository';
 
 @Injectable()
 export class TenantsService {
     constructor(
-        private prisma: PrismaService,
-        private usersService: UsersService
-    ) { }
+        private readonly tenantsRepository: TenantsRepository,
+        private readonly usersService: UsersService,
+    ) {}
 
-    async create(data: any) {
-        const { name, document, email, phone, profession, ...rest } = data;
+    // handles creating one tenant
+    async create(data: CreateTenantDto) {
+        const tenantData = this.buildTenantCreateData(data);
 
         try {
-            return await this.prisma.tenant.create({
-                data: {
-                    name,
-                    document,
-                    email: email || null,
-                    phone: phone || null,
-                    profession: profession || null,
-                }
-            });
-        } catch (error) {
-            if (error.code === 'P2002') {
-                throw new Error('Já existe um inquilino com este Documento (CPF/CNPJ).');
-            }
-            throw error;
+            return await this.tenantsRepository.create(tenantData);
+        } catch (error: unknown) {
+            this.handleTenantUniqueError(error);
         }
     }
 
+    // handles creating one tenant portal user
     async createUser(tenantId: string) {
-        const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
-        if (!tenant || !tenant.email) throw new Error("Inquilino não encontrado ou sem email.");
+        const tenant = await this.tenantsRepository.findTenantById(tenantId);
 
-        const existingUser = await this.prisma.user.findFirst({
-            where: { OR: [{ email: tenant.email }, { tenantId }] }
-        });
-        if (existingUser) throw new Error("Usuário já existe para este inquilino/email.");
+        if (!tenant) {
+            throw new NotFoundException('Inquilino não encontrado.');
+        }
 
-        const tempPassword = 'User@123';
-        // Create User via UsersService (hashes password)
+        if (!tenant.email) {
+            throw new BadRequestException('Inquilino não possui email cadastrado.');
+        }
+
+        const existingUser = await this.tenantsRepository.findUserByEmailOrTenantId(
+            tenant.email,
+            tenant.id,
+        );
+
+        if (existingUser) {
+            throw new ConflictException('Usuário já existe para este inquilino/email.');
+        }
+
+        const tempPassword = this.generateTemporaryPassword();
+
         await this.usersService.create({
             name: tenant.name,
             email: tenant.email,
             password: tempPassword,
             role: 'TENANT',
-            tenantId: tenant.id
+            tenantId: tenant.id,
         });
 
-        return { message: 'Usuário criado', email: tenant.email, tempPassword };
+        return {
+            message: 'Usuário criado',
+            email: tenant.email,
+            tempPassword,
+        };
     }
 
+    // handles finding all tenants
     findAll() {
-        return this.prisma.tenant.findMany({ include: { contract: true, guarantors: true } });
+        return this.tenantsRepository.findAll();
     }
 
+    // handles finding one tenant by id
     findOne(id: string) {
-        return this.prisma.tenant.findUnique({
-            where: { id },
-            include: { contract: true, guarantors: true },
-        });
+        return this.tenantsRepository.findById(id);
     }
-    async update(id: string, data: any) {
-        const { name, document, email, phone, profession } = data;
+
+    // handles updating one tenant
+    async update(id: string, data: UpdateTenantRecordData) {
+        const tenantData = this.buildTenantUpdateData(data);
+
         try {
-            return await this.prisma.tenant.update({
-                where: { id },
-                data: {
-                    name,
-                    document,
-                    email: email || null,
-                    phone: phone || null,
-                    profession: profession || null,
-                }
-            });
-        } catch (error) {
-            if (error.code === 'P2002') {
-                throw new Error('Já existe um inquilino com este Documento (CPF/CNPJ).');
-            }
-            throw error;
+            return await this.tenantsRepository.updateById(id, tenantData);
+        } catch (error: unknown) {
+            this.handleTenantUniqueError(error);
         }
     }
 
-    async remove(id: string) {
-        return this.prisma.tenant.delete({ where: { id } });
+    // handles removing one tenant
+    remove(id: string) {
+        return this.tenantsRepository.deleteById(id);
+    }
+
+    // handles mapping tenant create payload to repository input
+    private buildTenantCreateData(data: CreateTenantDto): CreateTenantRecordData {
+        return {
+            name: data.name,
+            document: data.document,
+            email: data.email || null,
+            phone: data.phone || null,
+            profession: data.profession || null,
+        };
+    }
+
+    // handles mapping tenant update payload to repository input
+    private buildTenantUpdateData(data: UpdateTenantRecordData): UpdateTenantRecordData {
+        return {
+            name: data.name,
+            document: data.document,
+            email: data.email || null,
+            phone: data.phone || null,
+            profession: data.profession || null,
+        };
+    }
+
+    // handles generating one strong temporary password
+    private generateTemporaryPassword() {
+        return `Tmp#A1a${randomBytes(8).toString('hex')}`;
+    }
+
+    // handles translating repository unique errors into http exceptions
+    private handleTenantUniqueError(error: unknown): never {
+        if (
+            typeof error === 'object' &&
+            error !== null &&
+            'code' in error &&
+            error.code === 'P2002'
+        ) {
+            throw new ConflictException(
+                'Já existe um inquilino com este Documento (CPF/CNPJ).',
+            );
+        }
+
+        throw error;
     }
 }

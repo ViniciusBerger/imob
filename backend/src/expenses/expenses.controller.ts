@@ -5,6 +5,7 @@ import { CreateExpenseDto } from './dto/create-expense.dto';
 import { AuthGuard } from '@nestjs/passport';
 
 @Controller('expenses')
+@UseGuards(AuthGuard('jwt'))
 export class ExpensesController {
     constructor(
         private readonly expensesService: ExpensesService,
@@ -12,19 +13,16 @@ export class ExpensesController {
     ) { }
 
     @Post()
-    @UseGuards(AuthGuard('jwt'))
     create(@Body() createExpenseDto: CreateExpenseDto) {
         return this.expensesService.create(createExpenseDto);
     }
 
     @Get()
-    @UseGuards(AuthGuard('jwt'))
     findAll() {
         return this.combinedExpensesService.findAllUnified(); // Updated
     }
 
     @Get(':id')
-    @UseGuards(AuthGuard('jwt'))
     findOne(@Param('id') id: string) {
         return this.expensesService.findOne(id);
     }

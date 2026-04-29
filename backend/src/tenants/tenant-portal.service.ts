@@ -1,49 +1,34 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma.service';
+import { TenantPortalRepository } from './repository/tenant-portal-prisma.repository';
 
 @Injectable()
 export class TenantPortalService {
-    constructor(private prisma: PrismaService) { }
+    constructor(private readonly tenantPortalRepository: TenantPortalRepository) {}
 
-    async getTenantByEmail(email: string) {
-        return this.prisma.tenant.findFirst({
-            where: { email }, // Assuming Tenant has email field matching User email
-            include: { user: true }
-        });
+    getTenantByEmail(email: string) {
+        return this.tenantPortalRepository.findTenantByEmail(email);
     }
 
     async getDashboardData(userEmail: string) {
-        // 1. Find Tenant
-        const tenant = await this.prisma.tenant.findFirst({
-            where: { OR: [{ email: userEmail }, { user: { email: userEmail } }] }
-        });
+        const tenant =
+            await this.tenantPortalRepository.findTenantForDashboardByUserEmail(userEmail);
 
         if (!tenant) {
             throw new NotFoundException('Tenant profile not found for this user.');
         }
 
-        // 2. Active Contract
-        const activeLease = await this.prisma.leaseContract.findFirst({
-            where: {
-                tenantId: tenant.id,
-                isActive: true
-            },
-            include: { property: true }
-        });
+        const activeLease = await this.tenantPortalRepository.findActiveLeaseByTenantId(
+            tenant.id,
+        );
 
-        // 3. Open Invoices
-        const openInvoices = activeLease ? await this.prisma.invoice.findMany({
-            where: {
-                leaseId: activeLease.id,
-                status: { in: ['PENDING', 'OVERDUE'] }
-            },
-            orderBy: { dueDate: 'asc' }
-        }) : [];
+        const openInvoices = activeLease
+            ? await this.tenantPortalRepository.findOpenInvoicesByLeaseId(activeLease.id)
+            : [];
 
         return {
             tenant,
             activeLease,
-            openInvoices
+            openInvoices,
         };
     }
 }

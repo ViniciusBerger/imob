@@ -1,28 +1,35 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma.service';
 import { CreateExpenseDto } from './dto/create-expense.dto';
+import {
+    CreateExpenseRecordData,
+} from './repository/expenses-repository.interface';
+import { ExpensesRepository } from './repository/expenses-prisma.repository';
 
 @Injectable()
 export class ExpensesService {
-    constructor(private prisma: PrismaService) { }
+    constructor(private readonly expensesRepository: ExpensesRepository) {}
 
+    // handles creating one expense
     create(data: CreateExpenseDto) {
-        return this.prisma.expense.create({
-            data: {
-                ...data,
-                date: new Date(data.date),
-            },
-        });
+        const expenseData: CreateExpenseRecordData = {
+            description: data.description,
+            amount: data.amount,
+            date: data.date,
+            type: data.type,
+            category: data.category || null,
+            propertyId: data.propertyId,
+        };
+
+        return this.expensesRepository.create(expenseData);
     }
 
+    // handles finding all expenses
     findAll() {
-        return this.prisma.expense.findMany({ include: { property: true } });
+        return this.expensesRepository.findAll();
     }
 
+    // handles finding one expense by id
     findOne(id: string) {
-        return this.prisma.expense.findUnique({
-            where: { id },
-            include: { property: true },
-        });
+        return this.expensesRepository.findById(id);
     }
 }

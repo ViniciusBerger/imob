@@ -1,89 +1,112 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma.service';
+import {BadRequestException, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
+import { CreateUserRecordData, UpdateUserRecordData } from './repository/users-repository.interface';
+import { UsersRepository } from './repository/users-prisma.repository';
 
 @Injectable()
-export class UsersService {
-    constructor(private prisma: PrismaService) { }
+export class UsersService implements OnModuleInit {
+    private readonly logger = new Logger(UsersService.name);
 
+    constructor(private readonly usersRepository: UsersRepository) {}
+
+    // handles optional default admin bootstrap on module startup
     async onModuleInit() {
-        const adminEmail = 'admin@admin.com';
-        const adminExists = await this.prisma.user.findUnique({ where: { email: adminEmail } });
+        const shouldBootstrapAdmin =
+            process.env.ENABLE_DEFAULT_ADMIN_BOOTSTRAP === 'true';
 
-        if (!adminExists) {
-            const hashedPassword = await bcrypt.hash('admin', 10);
-            await this.prisma.user.create({
-                data: {
-                    name: 'Administrador',
-                    email: adminEmail,
-                    password: hashedPassword,
-                    role: 'ADMIN',
-                },
-            });
-            console.log('Default Admin User Created: admin@admin.com / admin');
+        if (!shouldBootstrapAdmin) {
+            return;
         }
+
+        const adminEmail = process.env.DEFAULT_ADMIN_EMAIL;
+        const adminPassword = process.env.DEFAULT_ADMIN_PASSWORD;
+
+        // handles skipping bootstrap when required env values are missing
+        if (!adminEmail || !adminPassword) {
+            this.logger.warn(
+                'Default admin bootstrap was enabled but DEFAULT_ADMIN_EMAIL or DEFAULT_ADMIN_PASSWORD is missing.',
+            );
+            return;
+        }
+
+        const adminExists = await this.usersRepository.findByEmail(adminEmail);
+
+        // handles preventing duplicate bootstrap admin creation
+        if (adminExists) {
+            return;
+        }
+
+        const hashedPassword = await bcrypt.hash(adminPassword, 10);
+
+        await this.usersRepository.create({
+            name: 'Administrador',
+            email: adminEmail,
+            password: hashedPassword,
+            role: 'ADMIN',
+        });
+
+        this.logger.warn(`Default admin user bootstrapped for ${adminEmail}`);
     }
 
-    async findOne(email: string) {
-        return this.prisma.user.findUnique({ where: { email } });
+    // handles finding one user by email
+    findOne(email: string) {
+        return this.usersRepository.findByEmail(email);
     }
 
-    async findById(id: string) {
-        return this.prisma.user.findUnique({ where: { id } });
+    // handles finding one user by id
+    findById(id: string) {
+        return this.usersRepository.findById(id);
     }
 
-    async findAll() {
-        return this.prisma.user.findMany({ select: { id: true, name: true, email: true, role: true, createdAt: true } });
+    // handles finding all users
+    findAll() {
+        return this.usersRepository.findAll();
     }
 
-    async create(data: any) {
+    // handles creating one user with hashed password
+    async create(data: CreateUserRecordData) {
         const hashedPassword = await bcrypt.hash(data.password, 10);
-        return this.prisma.user.create({
-            data: {
-                ...data,
-                password: hashedPassword,
-            },
+
+        return this.usersRepository.create({
+            ...data,
+            password: hashedPassword,
         });
     }
 
-    async update(id: string, data: any) {
-        const updateData: any = { ...data };
+    // handles updating one user and re-hashing password when provided
+    async update(id: string, data: UpdateUserRecordData) {
+        const updateData: UpdateUserRecordData = { ...data };
+
         if (updateData.password) {
             updateData.password = await bcrypt.hash(updateData.password, 10);
         }
-        return this.prisma.user.update({
-            where: { id },
-            data: updateData,
-        });
+
+        return this.usersRepository.updateById(id, updateData);
     }
 
-    async updateResetToken(email: string, token: string | null, expiry: Date | null) {
-        return this.prisma.user.update({
-            where: { email },
-            data: { resetToken: token, resetTokenExpiry: expiry }
-        });
-    }
-    async findByResetToken(token: string) {
-        return this.prisma.user.findFirst({
-            where: {
-                resetToken: token,
-                resetTokenExpiry: { gt: new Date() }
-            }
-        });
+    // handles saving one reset token and expiry for one user
+    updateResetToken(email: string, token: string | null, expiry: Date | null) {
+        return this.usersRepository.updateResetToken(email, token, expiry);
     }
 
+    // handles finding one user by valid reset token
+    findByResetToken(token: string) {
+        return this.usersRepository.findValidByResetToken(token);
+    }
+
+    // handles resetting one user password from reset token flow
     async resetPasswordWithToken(token: string, newPass: string) {
         const user = await this.findByResetToken(token);
-        if (!user) throw new Error('Invalid or expired token');
+
+        if (!user) {
+            throw new BadRequestException('Invalid or expired token');
+        }
 
         const hashedPassword = await bcrypt.hash(newPass, 10);
-        return this.prisma.user.update({
-            where: { id: user.id },
-            data: {
-                password: hashedPassword,
-                resetToken: null,
-                resetTokenExpiry: null
-            }
-        });
+
+        return this.usersRepository.updatePasswordAndClearResetToken(
+            user.id,
+            hashedPassword,
+        );
     }
 }

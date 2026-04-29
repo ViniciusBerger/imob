@@ -1,4 +1,4 @@
-import { UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { AuthService } from '../auth.service';
 import { UsersService } from '../../users/users.service';
@@ -10,9 +10,11 @@ describe('AuthService', () => {
 
     const usersServiceMock = {
         findOne: jest.fn(),
+        findById: jest.fn(),
+        update: jest.fn(),
         updateResetToken: jest.fn(),
         findByResetToken: jest.fn(),
-        update: jest.fn(),
+        resetPasswordWithToken: jest.fn(),
     };
 
     const jwtServiceMock = {
@@ -150,50 +152,31 @@ describe('AuthService', () => {
         });
     });
 
-    describe('resetPassword', () => {
-        it('should hash the new password, update the user, and return true when update succeeds', async () => {
-            const dbUser = {
+        it('should delegate password reset to UsersService and return true when update succeeds', async () => {
+            usersServiceMock.resetPasswordWithToken.mockResolvedValue({
                 id: 'user-1',
-                email: 'john@example.com',
-            };
-
-            usersServiceMock.findByResetToken.mockResolvedValue(dbUser);
-            jest.spyOn(bcrypt, 'hash').mockResolvedValue('new-hashed-password' as never);
-            usersServiceMock.update.mockResolvedValue({
-                id: 'user-1',
-                email: 'john@example.com',
+                email: 'test@test.com',
             });
 
             const result = await service.resetPassword('reset-token', 'new-password');
 
             expect(result).toBe(true);
-            expect(usersServiceMock.findByResetToken).toHaveBeenCalledWith('reset-token');
-            expect(bcrypt.hash).toHaveBeenCalledWith('new-password', 10);
-            expect(usersServiceMock.update).toHaveBeenCalledWith('user-1', {
-                password: 'new-hashed-password',
-                resetToken: null,
-                resetTokenExpiry: null,
-            });
+            expect(usersServiceMock.resetPasswordWithToken).toHaveBeenCalledWith(
+                'reset-token',
+                'new-password',
+            );
         });
 
-        it('should return false when update does not succeed', async () => {
-            const dbUser = {
-                id: 'user-1',
-                email: 'john@example.com',
-            };
+        it('should throw an error when update does not succeed', async () => {
+            usersServiceMock.resetPasswordWithToken.mockResolvedValue(null);
 
-            usersServiceMock.findByResetToken.mockResolvedValue(dbUser);
-            jest.spyOn(bcrypt, 'hash').mockResolvedValue('new-hashed-password' as never);
-            usersServiceMock.update.mockResolvedValue(null);
+            await expect(
+                service.resetPassword('bad-token', 'new-password'),
+            ).rejects.toThrow(BadRequestException);
 
-            const result = await service.resetPassword('reset-token', 'new-password');
-
-            expect(result).toBe(false);
-            expect(usersServiceMock.update).toHaveBeenCalledWith('user-1', {
-                password: 'new-hashed-password',
-                resetToken: null,
-                resetTokenExpiry: null,
-            });
+            expect(usersServiceMock.resetPasswordWithToken).toHaveBeenCalledWith(
+                'bad-token',
+                'new-password',
+            );
         });
     });
-});

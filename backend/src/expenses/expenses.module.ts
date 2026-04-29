@@ -1,11 +1,18 @@
 import { Module } from '@nestjs/common';
-import { ExpensesService } from './expenses.service';
-import { CombinedExpensesService } from './combined-expenses.service'; // Added
-import { ExpensesController } from './expenses.controller';
 import { PrismaService } from '../prisma.service';
+import { CombinedExpensesService } from './combined-expenses.service';
+import { ExpensesController } from './expenses.controller';
+import { ExpensesService } from './expenses.service';
+import { ExpensesRepository } from './repository/expenses-prisma.repository';
 
 @Module({
     controllers: [ExpensesController],
-    providers: [ExpensesService, CombinedExpensesService, PrismaService], // Added
+    providers: [
+        ExpensesService,
+        CombinedExpensesService,
+        ExpensesRepository,
+        PrismaService,
+    ],
+    exports: [ExpensesService],
 })
-export class ExpensesModule { }
+export class ExpensesModule {}
