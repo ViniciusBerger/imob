@@ -13,7 +13,7 @@ export default function HomePage() {
     useEffect(() => {
         const fetchProperties = async () => {
             try {
-                const data = await api.properties.findAll();
+                const data = await api.properties.findAll() as Property[];
                 setProperties(data);
             } catch (error) {
                 console.error('Failed to fetch properties', error);

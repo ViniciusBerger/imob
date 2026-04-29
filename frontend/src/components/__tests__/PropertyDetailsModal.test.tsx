@@ -2,6 +2,7 @@ import '@testing-library/jest-dom';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { AuthProvider } from '../../contexts/AuthContext';
 
 import PropertyDetailsModal from '../PropertyDetailsModal';
 
@@ -108,13 +109,15 @@ describe('PropertyDetailsModal', () => {
 
     function renderModal() {
         return render(
+        <AuthProvider>
             <PropertyDetailsModal
                 propertyId={propertyId}
-                onClose={onClose}
                 token={token}
+                onClose={onClose}
                 onUpdate={onUpdate}
-            />,
-        );
+            />
+        </AuthProvider>,
+    );
     }
 
     it('loads property data on mount', async () => {

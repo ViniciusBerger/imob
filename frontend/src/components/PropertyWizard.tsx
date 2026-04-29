@@ -3,6 +3,8 @@ import { useForm } from 'react-hook-form';
 import { Upload, ChevronRight, ChevronLeft, Check, DollarSign, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
+import { PropertyCreateInput } from '../api/properties.api';
+import { useAuth } from '../contexts/AuthContext';
 
 const STEPS = [
     { name: 'Dados Básicos', icon: FileText },
@@ -43,32 +45,47 @@ export default function PropertyWizard() {
     const [photos, setPhotos] = useState<File[]>([]);
     const [documents, setDocuments] = useState<File[]>([]);
 
-    const token = sessionStorage.getItem('token') || '';
+    const { token } = useAuth();
+    if (!token) return;
 
     const onSubmit = async (data: PropertyWizardFormData) => {
-        setIsSubmitting(true);
+    setIsSubmitting(true);
 
-        try {
-            const property = await api.properties.create(data, token);
-
-            if (photos.length > 0) {
-                await api.properties.uploadPhotos(property.id, toFileList(photos), token);
-            }
-
-            if (documents.length > 0) {
-                for (const document of documents) {
-                    await api.properties.uploadDocument(property.id, document, document.name, token);
-                }
-            }
-
-            navigate('/properties');
-        } catch (error) {
-            console.error(error);
-            alert('Erro ao criar imóvel');
-        } finally {
-            setIsSubmitting(false);
+    try {
+        if (data.builtArea == null || data.landArea == null) {
+            alert('Área construída e área do terreno são obrigatórias.');
+            return;
         }
-    };
+
+        const payload: PropertyCreateInput = {
+            ...data,
+            type: data.type ?? 'RESIDENTIAL',
+            builtArea: data.builtArea,
+            landArea: data.landArea,
+            address: data.address,
+            code: data.code,
+        };
+
+        const property = (await api.properties.create(payload, token)) as { id: string };
+
+        if (photos.length > 0) {
+            await api.properties.uploadPhotos(property.id, toFileList(photos), token);
+        }
+
+        if (documents.length > 0) {
+            for (const document of documents) {
+                await api.properties.uploadDocument(property.id, document, document.name, token);
+            }
+        }
+
+        navigate('/properties');
+    } catch (error) {
+        console.error(error);
+        alert('Erro ao criar imóvel');
+    } finally {
+        setIsSubmitting(false);
+    }
+};
 
     const nextStep = () => setCurrentStep((current) => Math.min(current + 1, STEPS.length - 1));
     const prevStep = () => setCurrentStep((current) => Math.max(current - 1, 0));

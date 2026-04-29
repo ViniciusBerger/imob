@@ -19,7 +19,7 @@ export default function PublicPropertyDetailsPage() {
             if (!id) return;
 
             try {
-                const data = await api.properties.findOne(id);
+                const data = await api.properties.findOne(id) as PublicProperty;
                 setProperty(data);
             } catch (error) {
                 console.error('Failed to fetch property details', error);

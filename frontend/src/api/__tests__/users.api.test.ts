@@ -42,7 +42,20 @@ describe('usersApi', () => {
     });
 
     it('me should currently return an empty object', async () => {
+        const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+            ok: true,
+            status: 200,
+            json: vi.fn().mockResolvedValue({}),
+        } as unknown as Response);
+
         const result = await usersApi.me('token-123');
+
+        expect(fetchMock).toHaveBeenCalledWith(`${API_URL}/users/me`, {
+            headers: {
+                Authorization: 'Bearer token-123',
+            },
+        });
+
         expect(result).toEqual({});
     });
 });

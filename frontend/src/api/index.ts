@@ -7,10 +7,13 @@ import { statsApi } from './stats.api';
 import { usersApi } from './users.api';
 import { siteConfigApi } from './site-config.api';
 import { expensesApi } from './expenses.api';
+import { guarantorsApi } from './guarantors.api';
+import { tenantsApi } from './tenants.api';
+import { tenantPortalApi } from './tenant-portal.api';
+import { invoicesApi } from './invoices.api';
 
 export { API_URL } from './client.api';
 export * from './types';
-
 export {
     authApi,
     propertiesApi,
@@ -20,7 +23,11 @@ export {
     statsApi,
     usersApi,
     siteConfigApi,
-    expensesApi
+    expensesApi,
+    guarantorsApi,
+    tenantsApi,
+    tenantPortalApi,
+    invoicesApi
 };
 
 export const api = {
@@ -32,5 +39,9 @@ export const api = {
     stats: statsApi,
     users: usersApi,
     siteConfig: siteConfigApi,
-    expenses: expensesApi
+    expenses: expensesApi,
+    guarantors: guarantorsApi,
+    tenants: tenantsApi,
+    tenantPortal: tenantPortalApi,
+    invoices: invoicesApi
 };

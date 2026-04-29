@@ -45,7 +45,7 @@ export default function PropertyDetailsModal({
 
     const fetchProperty = async () => {
         try {
-            const data = await api.properties.findOne(propertyId, token);
+            const data = await api.properties.findOne(propertyId, token) as Property;
             setProperty(data);
             setFormData(data);
         } catch (error) {

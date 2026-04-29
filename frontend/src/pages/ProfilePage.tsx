@@ -1,63 +1,76 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { User, Lock, Save } from 'lucide-react';
+import { api } from '../api';
+import { useAuth } from '../contexts/AuthContext';
+
+// represents the profile user shown in this page
+type ProfileUser = {
+    id: string;
+    name: string;
+    email: string;
+    role?: string;
+};
 
 export default function ProfilePage() {
-    const [user, setUser] = useState<any>(null);
+    const [user, setUser] = useState<ProfileUser | null>(null);
     const [name, setName] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
-    const token = sessionStorage.getItem('token');
+    const { token, login } = useAuth();
 
+    // handles loading the current user profile
     useEffect(() => {
+        if (!token) return;
+
         const fetchProfile = async () => {
             try {
-                const res = await fetch('/api/users/me', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    setUser(data);
-                    setName(data.name);
-                }
+                const data = (await api.users.me(token)) as ProfileUser;
+                setUser(data);
+                setName(data.name);
             } catch (error) {
                 console.error('Failed to fetch profile', error);
             }
         };
-        fetchProfile();
+
+        void fetchProfile();
     }, [token]);
 
-    const handleUpdate = async (e: React.FormEvent) => {
-        e.preventDefault();
+    // handles updating the current user profile
+    const handleUpdate = async (event: React.FormEvent) => {
+        event.preventDefault();
+
+        if (!token || !user) return;
+
         if (password && password !== confirmPassword) {
             alert('As senhas não coincidem!');
             return;
         }
 
         try {
-            const body: any = { name };
-            if (password) body.password = password;
+            const body: { name: string; password?: string } = { name };
 
-            const res = await fetch(`/api/users/${user.id}`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(body)
-            });
-
-            if (res.ok) {
-                alert('Perfil atualizado com sucesso!');
-                setPassword('');
-                setConfirmPassword('');
-                // Optionally update session storage user name
-                const storedUser = JSON.parse(sessionStorage.getItem('user') || '{}');
-                sessionStorage.setItem('user', JSON.stringify({ ...storedUser, name }));
-            } else {
-                alert('Falha ao atualizar perfil.');
+            if (password) {
+                body.password = password;
             }
+
+            await api.users.update(user.id, body, token);
+
+            alert('Perfil atualizado com sucesso!');
+            setPassword('');
+            setConfirmPassword('');
+
+            const updatedUser: ProfileUser = {
+                ...user,
+                name,
+            };
+
+            setUser(updatedUser);
+
+            // keeps auth context user aligned with the updated profile
+            login(token, updatedUser);
         } catch (error) {
             console.error('Error updating profile', error);
+            alert('Falha ao atualizar perfil.');
         }
     };
 
@@ -73,21 +86,27 @@ export default function ProfilePage() {
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 md:p-8">
                 <form onSubmit={handleUpdate} className="space-y-6">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Nome</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Nome
+                        </label>
+
                         <div className="relative">
                             <User className="absolute left-3 top-2.5 text-gray-400 w-5 h-5" />
                             <input
                                 type="text"
                                 required
                                 value={name}
-                                onChange={(e) => setName(e.target.value)}
+                                onChange={(event) => setName(event.target.value)}
                                 className="w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
                             />
                         </div>
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Email (Não editável)</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Email (Não editável)
+                        </label>
+
                         <input
                             type="email"
                             disabled
@@ -97,29 +116,41 @@ export default function ProfilePage() {
                     </div>
 
                     <div className="pt-4 border-t border-gray-100">
-                        <h3 className="text-lg font-medium text-gray-900 mb-4">Alterar Senha</h3>
+                        <h3 className="text-lg font-medium text-gray-900 mb-4">
+                            Alterar Senha
+                        </h3>
+
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Nova Senha</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Nova Senha
+                                </label>
+
                                 <div className="relative">
                                     <Lock className="absolute left-3 top-2.5 text-gray-400 w-5 h-5" />
                                     <input
                                         type="password"
                                         value={password}
-                                        onChange={(e) => setPassword(e.target.value)}
+                                        onChange={(event) => setPassword(event.target.value)}
                                         placeholder="Deixe em branco para manter a atual"
                                         className="w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
                                     />
                                 </div>
                             </div>
+
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Confirmar Nova Senha</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Confirmar Nova Senha
+                                </label>
+
                                 <div className="relative">
                                     <Lock className="absolute left-3 top-2.5 text-gray-400 w-5 h-5" />
                                     <input
                                         type="password"
                                         value={confirmPassword}
-                                        onChange={(e) => setConfirmPassword(e.target.value)}
+                                        onChange={(event) =>
+                                            setConfirmPassword(event.target.value)
+                                        }
                                         placeholder="Repita a nova senha"
                                         className="w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
                                     />

@@ -1,133 +1,60 @@
-import { useState, useEffect } from 'react';
-import { Plus, User, FileText, Check, Trash2, Edit, Key } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
+import { useEffect, useState } from 'react';
+import { Edit, FileText, Key, Plus, Trash2, User } from 'lucide-react';
 import PersonForm from '../components/PersonForm';
+import { api } from '../api';
+import { useAuth } from '../contexts/AuthContext';
+
+// represents one tenant or guarantor record rendered in the page list
+interface PersonRecord {
+    id: string;
+    name: string;
+    document: string;
+    email?: string | null;
+    phone?: string | null;
+    tenantId?: string | null;
+}
+
+// represents one tenant option used in the guarantor link dropdown
+interface TenantOption {
+    id: string;
+    name: string;
+    document: string;
+}
 
 export default function PeoplePage() {
     const { token } = useAuth();
+
     const [activeTab, setActiveTab] = useState<'tenants' | 'guarantors'>('tenants');
-    const [people, setPeople] = useState<any[]>([]);
+    const [people, setPeople] = useState<PersonRecord[]>([]);
+    const [tenantsList, setTenantsList] = useState<TenantOption[]>([]);
     const [showForm, setShowForm] = useState(false);
     const [loading, setLoading] = useState(false);
     const [editId, setEditId] = useState<string | null>(null);
 
-    // Tenant/Guarantor Form Data
-    const [formData, setFormData] = useState({
-        name: '',
-        document: '', // CPF/CNPJ
-        email: '',
-        phone: '',
-        tenantId: '' // Only for Guarantor
-    });
-
-    const [tenantsList, setTenantsList] = useState<any[]>([]); // For guarantor dropdown
-
+    // keeps the page list in sync with the current active tab
     useEffect(() => {
-        fetchPeople();
+        if (!token) return;
+
+        loadPeople();
+
         if (activeTab === 'guarantors') {
-            fetchTenantsForDropdown();
+            loadTenantsForDropdown();
         }
-    }, [activeTab]);
+    }, [activeTab, token]);
 
-    const fetchPeople = async () => {
-        const endpoint = activeTab === 'tenants' ? '/api/tenants' : '/api/guarantors';
-        try {
-            const res = await fetch(endpoint, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) setPeople(await res.json());
-        } catch (error) {
-            console.error(error);
-        }
-    };
+    // handles loading either tenants or guarantors for the current tab
+    const loadPeople = async () => {
+        if (!token) return;
 
-    const fetchTenantsForDropdown = async () => {
-        try {
-            const res = await fetch('/api/tenants', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) setTenantsList(await res.json());
-        } catch (error) {
-            console.error(error);
-        }
-    };
-
-    const resetForm = () => {
-        setFormData({ name: '', document: '', email: '', phone: '', tenantId: '' });
-        setEditId(null);
-        setShowForm(false);
-    };
-
-    const handleEdit = (person: any) => {
-        setEditId(person.id);
-        setFormData({
-            name: person.name,
-            document: person.document,
-            email: person.email || '',
-            phone: person.phone || '',
-            tenantId: person.tenantId || ''
-        });
-        setShowForm(true);
-    };
-
-    const handleCreateUser = async (id: string, name: string) => {
-        if (!window.confirm(`Criar acesso de usuário para "${name}"?\nIsso irá gerar uma senha temporária.`)) return;
-
-        try {
-            const res = await fetch(`/api/tenants/${id}/user`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await res.json();
-            if (res.ok) {
-                alert(`Usuário criado com sucesso!\nEmail: ${data.email}\nSenha Temporária: ${data.tempPassword}`);
-            } else {
-                alert(`Erro: ${data.message || 'Falha ao criar usuário'}`);
-            }
-        } catch (error) {
-            console.error(error);
-            alert('Erro de conexão.');
-        }
-    };
-
-    const handleDelete = async (id: string, name: string) => {
-        if (!window.confirm(`Tem certeza que deseja excluir "${name}"?`)) return;
-
-        const endpoint = activeTab === 'tenants' ? `/api/tenants/${id}` : `/api/guarantors/${id}`;
-        try {
-            const res = await fetch(endpoint, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) fetchPeople();
-            else alert('Erro ao excluir. Verifique se não há contratos vinculados.');
-        } catch (error) { console.error(error); }
-    };
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
         setLoading(true);
 
-        const baseUrl = activeTab === 'tenants' ? '/api/tenants' : '/api/guarantors';
-        const url = editId ? `${baseUrl}/${editId}` : baseUrl;
-        const method = editId ? 'PATCH' : 'POST';
-
         try {
-            const res = await fetch(url, {
-                method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(formData)
-            });
+            const data =
+                activeTab === 'tenants'
+                    ? await api.tenants.findAll(token)
+                    : await api.guarantors.findAll(token);
 
-            if (res.ok) {
-                resetForm();
-                fetchPeople();
-            } else {
-                alert('Erro ao salvar cadastro');
-            }
+            setPeople(data);
         } catch (error) {
             console.error(error);
         } finally {
@@ -135,26 +62,106 @@ export default function PeoplePage() {
         }
     };
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
+    // handles loading tenants for the guarantor tenant-link dropdown
+    const loadTenantsForDropdown = async () => {
+        if (!token) return;
+
+        try {
+            const data = await api.tenants.findAll(token);
+            setTenantsList(data);
+        } catch (error) {
+            console.error(error);
+        }
     };
+
+    // resets page-level form state when leaving create or edit mode
+    const resetForm = () => {
+        setEditId(null);
+        setShowForm(false);
+    };
+
+    // handles opening edit mode for one tenant or guarantor
+    const handleEdit = (person: PersonRecord) => {
+        setEditId(person.id);
+        setShowForm(true);
+    };
+
+    // handles creating portal access for one tenant
+    const handleCreateUser = async (id: string, name: string) => {
+        if (!token) return;
+
+        if (!window.confirm(`Criar acesso de usuário para "${name}"?\nIsso irá gerar uma senha temporária.`)) {
+            return;
+        }
+
+        try {
+            const data = await api.tenants.createUser(id, token);
+
+            alert(
+                `Usuário criado com sucesso!\nEmail: ${data.email}\nSenha Temporária: ${data.tempPassword}`,
+            );
+        } catch (error: any) {
+            console.error(error);
+            alert(`Erro: ${error?.message || 'Falha ao criar usuário'}`);
+        }
+    };
+
+    // handles deleting one tenant or guarantor depending on the active tab
+    const handleDelete = async (id: string, name: string) => {
+        if (!token) return;
+
+        if (!window.confirm(`Tem certeza que deseja excluir "${name}"?`)) {
+            return;
+        }
+
+        try {
+            if (activeTab === 'tenants') {
+                await api.tenants.remove(id, token);
+            } else {
+                await api.guarantors.remove(id, token);
+            }
+
+            await loadPeople();
+        } catch (error: any) {
+            console.error(error);
+            alert(error?.message || 'Erro ao excluir. Verifique se não há contratos vinculados.');
+        }
+    };
+
+    // derives the current record being edited so PersonForm can stay focused on form behavior
+    const editingPerson = editId ? people.find((person) => person.id === editId) : undefined;
 
     return (
         <div>
-            {/* Header & Tabs */}
+            {/* handles page header, tab switch, and create/cancel action */}
             <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
                 <h1 className="text-2xl font-bold text-gray-800">Gestão de Pessoas</h1>
 
                 <div className="flex bg-gray-100 p-1 rounded-lg">
                     <button
-                        onClick={() => { setActiveTab('tenants'); setShowForm(false); }}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'tenants' ? 'bg-white shadow-sm text-primary-600' : 'text-gray-500 hover:text-gray-700'}`}
+                        onClick={() => {
+                            setActiveTab('tenants');
+                            resetForm();
+                        }}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                            activeTab === 'tenants'
+                                ? 'bg-white shadow-sm text-primary-600'
+                                : 'text-gray-500 hover:text-gray-700'
+                        }`}
                     >
                         Inquilinos
                     </button>
+
                     <button
-                        onClick={() => { setActiveTab('guarantors'); setShowForm(false); }}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'guarantors' ? 'bg-white shadow-sm text-primary-600' : 'text-gray-500 hover:text-gray-700'}`}
+                        onClick={() => {
+                            setActiveTab('guarantors');
+                            resetForm();
+                        }}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                            activeTab === 'guarantors'
+                                ? 'bg-white shadow-sm text-primary-600'
+                                : 'text-gray-500 hover:text-gray-700'
+                        }`}
                     >
                         Fiadores
                     </button>
@@ -162,8 +169,11 @@ export default function PeoplePage() {
 
                 <button
                     onClick={() => {
-                        if (showForm) resetForm();
-                        else setShowForm(true);
+                        if (showForm) {
+                            resetForm();
+                        } else {
+                            setShowForm(true);
+                        }
                     }}
                     className="flex items-center gap-2 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors"
                 >
@@ -172,57 +182,79 @@ export default function PeoplePage() {
                 </button>
             </div>
 
-            {/* Form */}
+            {/* renders the shared tenant/guarantor form with the current page context */}
             {showForm && (
                 <div className="mb-8">
                     <PersonForm
                         type={activeTab === 'tenants' ? 'tenant' : 'guarantor'}
                         token={token || ''}
-                        onSuccess={() => {
+                        onSuccess={async () => {
                             resetForm();
-                            fetchPeople();
+                            await loadPeople();
+
+                            if (activeTab === 'guarantors') {
+                                await loadTenantsForDropdown();
+                            }
                         }}
                         onCancel={resetForm}
-                        initialData={editId ? people.find(p => p.id === editId) : undefined}
+                        initialData={editingPerson}
                         tenantsList={tenantsList}
                     />
                 </div>
             )}
 
-            {/* List */}
+            {/* renders the current tenant or guarantor list */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {people.map((p) => (
-                    <div key={p.id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-start gap-4 justify-between group">
+                {people.map((person) => (
+                    <div
+                        key={person.id}
+                        className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-start gap-4 justify-between group"
+                    >
                         <div className="flex items-start gap-4">
-                            <div className={`p-3 rounded-full ${activeTab === 'tenants' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
+                            <div
+                                className={`p-3 rounded-full ${
+                                    activeTab === 'tenants'
+                                        ? 'bg-blue-100 text-blue-600'
+                                        : 'bg-purple-100 text-purple-600'
+                                }`}
+                            >
                                 {activeTab === 'tenants' ? <User size={24} /> : <FileText size={24} />}
                             </div>
+
                             <div>
-                                <h3 className="font-bold text-gray-800">{p.name}</h3>
-                                <p className="text-sm text-gray-500">{p.email}</p>
-                                <p className="text-xs text-gray-400 mt-1">{p.document}</p>
-                                {p.tenantId && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded mt-2 inline-block">Fiador Vinculado</span>}
+                                <h3 className="font-bold text-gray-800">{person.name}</h3>
+                                <p className="text-sm text-gray-500">{person.email}</p>
+                                <p className="text-xs text-gray-400 mt-1">{person.document}</p>
+
+                                {person.tenantId && (
+                                    <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded mt-2 inline-block">
+                                        Fiador Vinculado
+                                    </span>
+                                )}
                             </div>
                         </div>
+
                         <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             {activeTab === 'tenants' && (
                                 <button
-                                    onClick={() => handleCreateUser(p.id, p.name)}
+                                    onClick={() => handleCreateUser(person.id, person.name)}
                                     className="p-2 text-gray-400 hover:text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors"
                                     title="Criar Acesso de Usuário"
                                 >
                                     <Key size={18} />
                                 </button>
                             )}
+
                             <button
-                                onClick={() => handleEdit(p)}
+                                onClick={() => handleEdit(person)}
                                 className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                 title="Editar"
                             >
                                 <Edit size={18} />
                             </button>
+
                             <button
-                                onClick={() => handleDelete(p.id, p.name)}
+                                onClick={() => handleDelete(person.id, person.name)}
                                 className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                 title="Excluir"
                             >
@@ -233,6 +265,7 @@ export default function PeoplePage() {
                 ))}
             </div>
 
+            {/* renders the empty state only after loading finishes */}
             {people.length === 0 && !loading && (
                 <div className="text-center py-12 text-gray-400 bg-gray-50 rounded-xl border border-dashed col-span-full">
                     <User size={48} className="mx-auto mb-3 opacity-20" />

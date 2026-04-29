@@ -10,6 +10,21 @@ export interface LoginCredentials {
     password: string;
 }
 
+export type UserListItem = {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    createdAt: string;
+};
+
+export type CreateUserPayload = {
+    name: string;
+    email: string;
+    password: string;
+    role: string;
+};
+
 export interface LoginResponse {
     access_token: string;
     user: AuthUser;

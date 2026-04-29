@@ -43,7 +43,7 @@ export default function ContractsPage() {
         if (!token) return;
 
         try {
-            const data = await api.leases.findAll(token);
+            const data = await api.leases.findAll(token) as LeaseListItem[];
             setLeases(data);
         } catch (error) {
             console.error(error);

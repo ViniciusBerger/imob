@@ -1,5 +1,6 @@
 import { RefObject } from 'react';
 import { Send, StickyNote } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 type PropertyNote = {
     id: string;
@@ -23,7 +24,8 @@ export default function PropertyNotesSection({
     onAddNote,
     chatEndRef,
 }: PropertyNotesSectionProps) {
-    const currentUserId = getCurrentUserId();
+    const { user } = useAuth();
+    const currentUserId = user?.id ?? null;
 
     return (
         <div className="w-1/3 min-w-[320px] max-w-[400px] border-l bg-white flex flex-col h-full z-20 shadow-lg">
@@ -91,17 +93,6 @@ export default function PropertyNotesSection({
             </div>
         </div>
     );
-}
-
-function getCurrentUserId() {
-    const userStr = sessionStorage.getItem('user');
-    if (!userStr) return null;
-
-    try {
-        return JSON.parse(userStr).id ?? null;
-    } catch {
-        return null;
-    }
 }
 
 function formatNoteTime(value: string | Date) {
