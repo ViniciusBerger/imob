@@ -19,7 +19,6 @@ import { InvoicesRepository } from './repository/invoices-prisma.repository';
     InvoicesService,
     PrismaService,
     InvoicesRepository,
-  ],
-  exports: [INVOICES_REPOSITORY],
+  ]
 })
 export class InvoicesModule {}
