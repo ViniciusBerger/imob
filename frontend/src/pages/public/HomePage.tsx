@@ -13,8 +13,8 @@ export default function HomePage() {
     useEffect(() => {
         const fetchProperties = async () => {
             try {
-                const data = await api.properties.findAll() as Property[];
-                setProperties(data);
+                const data = await api.properties.findAll();
+                setProperties(isPropertyArray(data) ? data : []);
             } catch (error) {
                 console.error('Failed to fetch properties', error);
             } finally {
@@ -24,6 +24,10 @@ export default function HomePage() {
 
         fetchProperties();
     }, []);
+
+    function isPropertyArray(value: unknown): value is Property[] {
+        return Array.isArray(value);
+}
 
     const filteredProperties = properties.filter((p) => {
         const matchesFilter =
